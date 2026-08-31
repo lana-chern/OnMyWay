@@ -10,7 +10,7 @@
         <relativePath/>
     </parent>
 
-    <groupId>com</groupId>
+    <groupId>com.onmyway</groupId>
     <artifactId>OnMyWay</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>OnMyWay</name>
