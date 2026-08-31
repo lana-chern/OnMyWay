@@ -2,7 +2,6 @@ package com.onmyway.controllers;
 
 import com.onmyway.data.entities.District;
 import com.onmyway.data.repositories.DistrictRepository;
-import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -13,9 +12,12 @@ import java.util.List;
 import java.util.Optional;
 
 @RestController
-@RequiredArgsConstructor
 public class MainController {
     private final DistrictRepository districtRepository;
+
+    public MainController(DistrictRepository districtRepository) {
+        this.districtRepository = districtRepository;
+    }
 
     @GetMapping("/hello")
     public String returnHelloWorld() {

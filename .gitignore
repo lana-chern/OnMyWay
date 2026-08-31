@@ -1,11 +1,11 @@
 HELP.md
 target/
+
+### Maven Wrapper ###
 !.mvn/wrapper/maven-wrapper.jar
-!**/src/main/**/target/
-!**/src/test/**/target/
-*.mvn
-mvnw
-mvnw.cmd
+!.mvn/wrapper/maven-wrapper.properties
+!mvnw
+!mvnw.cmd
 
 ### STS ###
 .apt_generated
@@ -17,7 +17,7 @@ mvnw.cmd
 .sts4-cache
 
 ### IntelliJ IDEA ###
-.idea
+.idea/
 *.iws
 *.iml
 *.ipr
