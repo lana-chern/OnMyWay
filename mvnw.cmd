@@ -1,48 +1,92 @@
-@echo off
-setlocal
-set "MAVEN_VERSION=3.9.11"
-if "%MAVEN_USER_HOME%"=="" set "MAVEN_USER_HOME=%USERPROFILE%\.m2"
-set "MAVEN_HOME=%MAVEN_USER_HOME%\wrapper\dists\apache-maven-%MAVEN_VERSION%"
-set "MAVEN_EXE=%MAVEN_HOME%\bin\mvn.cmd"
-
-if exist "%MAVEN_EXE%" goto run_maven
-
-set "TMP_DIR=%TEMP%\maven-wrapper-%RANDOM%%RANDOM%"
-mkdir "%TMP_DIR%" >nul 2>&1
-set "ARCHIVE=%TMP_DIR%\apache-maven-%MAVEN_VERSION%-bin.zip"
-set "URL=https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/%MAVEN_VERSION%/apache-maven-%MAVEN_VERSION%-bin.zip"
-
-echo Downloading Maven %MAVEN_VERSION% from %URL%
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Invoke-WebRequest -UseBasicParsing -Uri '%URL%' -OutFile '%ARCHIVE%'"
-if errorlevel 1 goto download_error
-
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Expand-Archive -Path '%ARCHIVE%' -DestinationPath '%TMP_DIR%' -Force"
-if errorlevel 1 goto extract_error
-
-if not exist "%MAVEN_USER_HOME%\wrapper\dists" mkdir "%MAVEN_USER_HOME%\wrapper\dists"
-if exist "%MAVEN_HOME%" rmdir /s /q "%MAVEN_HOME%"
-move "%TMP_DIR%\apache-maven-%MAVEN_VERSION%" "%MAVEN_USER_HOME%\wrapper\dists\" >nul
-if errorlevel 1 goto install_error
-
-rmdir /s /q "%TMP_DIR%" >nul 2>&1
-
-goto run_maven
-
-:download_error
-echo Failed to download Maven %MAVEN_VERSION%. 1>&2
-rmdir /s /q "%TMP_DIR%" >nul 2>&1
-exit /b 1
-
-:extract_error
-echo Failed to extract Maven %MAVEN_VERSION%. 1>&2
-rmdir /s /q "%TMP_DIR%" >nul 2>&1
-exit /b 1
-
-:install_error
-echo Failed to install Maven %MAVEN_VERSION%. 1>&2
-rmdir /s /q "%TMP_DIR%" >nul 2>&1
-exit /b 1
-
-:run_maven
-call "%MAVEN_EXE%" %*
-exit /b %ERRORLEVEL%
+<# : batch portion
+@REM ----------------------------------------------------------------------------
+@REM Licensed to the Apache Software Foundation (ASF) under one
+@REM or more contributor license agreements. See the NOTICE file
+@REM distributed with this work for additional information
+@REM regarding copyright ownership. The ASF licenses this file
+@REM to you under the Apache License, Version 2.0 (the
+@REM "License"); you may not use this file except in compliance
+@REM with the License. You may obtain a copy of the License at
+@REM
+@REM    http://www.apache.org/licenses/LICENSE-2.0
+@REM
+@REM Unless required by applicable law or agreed to in writing,
+@REM software distributed under the License is distributed on an
+@REM "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+@REM KIND, either express or implied. See the License for the
+@REM specific language governing permissions and limitations
+@REM under the License.
+@REM ----------------------------------------------------------------------------
+@REM Apache Maven Wrapper startup batch script, version 3.3.4
+@REM
+@REM Optional ENV vars
+@REM   MVNW_REPOURL - repo url base for downloading maven distribution
+@REM   MVNW_USERNAME/MVNW_PASSWORD - user and password for downloading maven
+@REM   MVNW_VERBOSE - true: enable verbose log; others: silence the output
+@REM ----------------------------------------------------------------------------
+@IF "%__MVNW_ARG0_NAME__%"=="" (SET __MVNW_ARG0_NAME__=%~nx0)
+@SET __MVNW_CMD__=
+@SET __MVNW_PSMODULEP_SAVE=%PSModulePath%
+@SET PSModulePath=
+@FOR /F "usebackq tokens=1* delims==" %%A IN (`powershell -noprofile "& {$scriptDir='%~dp0'; $script='%__MVNW_ARG0_NAME__%'; icm -ScriptBlock ([Scriptblock]::Create((Get-Content -Raw '%~f0'))) -NoNewScope}"`) DO @(
+  IF "%%A"=="MVN_CMD" (set __MVNW_CMD__=%%B) ELSE IF "%%B"=="" (echo %%A) ELSE (echo %%A=%%B)
+)
+@SET PSModulePath=%__MVNW_PSMODULEP_SAVE%
+@SET __MVNW_PSMODULEP_SAVE=
+@SET __MVNW_ARG0_NAME__=
+@SET MVNW_USERNAME=
+@SET MVNW_PASSWORD=
+@IF NOT "%__MVNW_CMD__%"=="" ("%__MVNW_CMD__%" %*)
+@echo Cannot start maven from wrapper >&2 && exit /b 1
+@GOTO :EOF
+: end batch / begin powershell #>
+$ErrorActionPreference = "Stop"
+if ($env:MVNW_VERBOSE -eq "true") { $VerbosePreference = "Continue" }
+$distributionUrl = (Get-Content -Raw "$scriptDir/.mvn/wrapper/maven-wrapper.properties" | ConvertFrom-StringData).distributionUrl
+if (!$distributionUrl) { Write-Error "cannot read distributionUrl property in $scriptDir/.mvn/wrapper/maven-wrapper.properties" }
+switch -wildcard -casesensitive ($($distributionUrl -replace '^.*/','')) {
+  "maven-mvnd-*" { $USE_MVND=$true; $distributionUrl=$distributionUrl -replace '-bin\.[^.]*$',"-windows-amd64.zip"; $MVN_CMD="mvnd.cmd"; break }
+  default { $USE_MVND=$false; $MVN_CMD=$script -replace '^mvnw','mvn'; break }
+}
+if ($env:MVNW_REPOURL) {
+  $MVNW_REPO_PATTERN=if ($USE_MVND -eq $False) { "/org/apache/maven/" } else { "/maven/mvnd/" }
+  $distributionUrl="$env:MVNW_REPOURL$MVNW_REPO_PATTERN$($distributionUrl -replace "^.*$MVNW_REPO_PATTERN",'')"
+}
+$distributionUrlName=$distributionUrl -replace '^.*/',''
+$distributionUrlNameMain=$distributionUrlName -replace '\.[^.]*$','' -replace '-bin$',''
+$MAVEN_M2_PATH="$HOME/.m2"
+if ($env:MAVEN_USER_HOME) { $MAVEN_M2_PATH=$env:MAVEN_USER_HOME }
+if (-not (Test-Path -Path $MAVEN_M2_PATH)) { New-Item -Path $MAVEN_M2_PATH -ItemType Directory | Out-Null }
+$MAVEN_WRAPPER_DISTS="$MAVEN_M2_PATH/wrapper/dists"
+$MAVEN_HOME_PARENT="$MAVEN_WRAPPER_DISTS/$distributionUrlNameMain"
+$MAVEN_HOME_NAME=([System.Security.Cryptography.SHA256]::Create().ComputeHash([byte[]][char[]]$distributionUrl) | ForEach-Object {$_.ToString("x2")}) -join ''
+$MAVEN_HOME="$MAVEN_HOME_PARENT/$MAVEN_HOME_NAME"
+if (Test-Path -Path "$MAVEN_HOME" -PathType Container) { Write-Output "MVN_CMD=$MAVEN_HOME/bin/$MVN_CMD"; exit $? }
+if (!$distributionUrlNameMain -or ($distributionUrlName -eq $distributionUrlNameMain)) { Write-Error "distributionUrl is not valid, must end with *-bin.zip, but found $distributionUrl" }
+$TMP_DOWNLOAD_DIR_HOLDER=New-TemporaryFile
+$TMP_DOWNLOAD_DIR=New-Item -Itemtype Directory -Path "$TMP_DOWNLOAD_DIR_HOLDER.dir"
+$TMP_DOWNLOAD_DIR_HOLDER.Delete() | Out-Null
+trap { if ($TMP_DOWNLOAD_DIR.Exists) { try { Remove-Item $TMP_DOWNLOAD_DIR -Recurse -Force | Out-Null } catch { Write-Warning "Cannot remove $TMP_DOWNLOAD_DIR" } } }
+New-Item -Itemtype Directory -Path "$MAVEN_HOME_PARENT" -Force | Out-Null
+$webclient=New-Object System.Net.WebClient
+if ($env:MVNW_USERNAME -and $env:MVNW_PASSWORD) { $webclient.Credentials=New-Object System.Net.NetworkCredential($env:MVNW_USERNAME,$env:MVNW_PASSWORD) }
+[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12
+$webclient.DownloadFile($distributionUrl,"$TMP_DOWNLOAD_DIR/$distributionUrlName") | Out-Null
+$distributionSha256Sum=(Get-Content -Raw "$scriptDir/.mvn/wrapper/maven-wrapper.properties" | ConvertFrom-StringData).distributionSha256Sum
+if ($distributionSha256Sum) {
+  if ($USE_MVND) { Write-Error "Checksum validation is not supported for maven-mvnd." }
+  Import-Module $PSHOME\Modules\Microsoft.PowerShell.Utility -Function Get-FileHash
+  if ((Get-FileHash "$TMP_DOWNLOAD_DIR/$distributionUrlName" -Algorithm SHA256).Hash.ToLower() -ne $distributionSha256Sum) { Write-Error "Error: Failed to validate Maven distribution SHA-256." }
+}
+Expand-Archive "$TMP_DOWNLOAD_DIR/$distributionUrlName" -DestinationPath "$TMP_DOWNLOAD_DIR" | Out-Null
+$actualDistributionDir=""
+$expectedPath=Join-Path "$TMP_DOWNLOAD_DIR" "$distributionUrlNameMain"
+$expectedMvnPath=Join-Path "$expectedPath" "bin/$MVN_CMD"
+if ((Test-Path -Path $expectedPath -PathType Container) -and (Test-Path -Path $expectedMvnPath -PathType Leaf)) { $actualDistributionDir=$distributionUrlNameMain }
+if (!$actualDistributionDir) {
+  Get-ChildItem -Path "$TMP_DOWNLOAD_DIR" -Directory | ForEach-Object { $testPath=Join-Path $_.FullName "bin/$MVN_CMD"; if (Test-Path -Path $testPath -PathType Leaf) { $actualDistributionDir=$_.Name } }
+}
+if (!$actualDistributionDir) { Write-Error "Could not find Maven distribution directory in extracted archive" }
+Rename-Item -Path "$TMP_DOWNLOAD_DIR/$actualDistributionDir" -NewName $MAVEN_HOME_NAME | Out-Null
+try { Move-Item -Path "$TMP_DOWNLOAD_DIR/$MAVEN_HOME_NAME" -Destination $MAVEN_HOME_PARENT | Out-Null } catch { if (!(Test-Path -Path "$MAVEN_HOME" -PathType Container)) { Write-Error "fail to move MAVEN_HOME" } } finally { try { Remove-Item $TMP_DOWNLOAD_DIR -Recurse -Force | Out-Null } catch { Write-Warning "Cannot remove $TMP_DOWNLOAD_DIR" } }
+Write-Output "MVN_CMD=$MAVEN_HOME/bin/$MVN_CMD"
