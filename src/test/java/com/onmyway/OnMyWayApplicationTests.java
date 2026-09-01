@@ -2,8 +2,10 @@ package com.onmyway;
 
 import com.onmyway.data.entities.*;
 import com.onmyway.data.repositories.CityRepository;
+import com.onmyway.data.repositories.PlaceOpeningHoursRepository;
 import com.onmyway.data.repositories.PlaceRepository;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,10 +21,17 @@ class OnMyWayApplicationTests {
 
     private final CityRepository cityRepository;
     private final PlaceRepository placeRepository;
+    private final PlaceOpeningHoursRepository openingHoursRepository;
 
-    OnMyWayApplicationTests(CityRepository cityRepository, PlaceRepository placeRepository) {
+    @Autowired
+    OnMyWayApplicationTests(
+            CityRepository cityRepository,
+            PlaceRepository placeRepository,
+            PlaceOpeningHoursRepository openingHoursRepository
+    ) {
         this.cityRepository = cityRepository;
         this.placeRepository = placeRepository;
+        this.openingHoursRepository = openingHoursRepository;
     }
 
     @Test
@@ -31,13 +40,7 @@ class OnMyWayApplicationTests {
 
     @Test
     void savesPlaceWithCityAndPersistsCoreFields() {
-        City city = new City();
-        city.setName("Amsterdam");
-        city.setCountryCode("NL");
-        city.setLatitude(new BigDecimal("52.367600"));
-        city.setLongitude(new BigDecimal("4.904100"));
-        city.setTimezone("Europe/Amsterdam");
-        city = cityRepository.save(city);
+        City city = city("Amsterdam", "52.367600", "4.904100");
 
         Place place = new Place();
         place.setCity(city);
@@ -56,27 +59,30 @@ class OnMyWayApplicationTests {
     }
 
     @Test
-    void allowsMultipleOpeningIntervalsForSameDay() {
+    void persistsMultipleOpeningIntervalsForSameDay() {
+        City city = city("Test city", "52.000000", "4.000000");
+
         Place place = new Place();
-        City city = new City();
-        city.setName("Test city");
-        city.setCountryCode("NL");
-        city.setLatitude(new BigDecimal("52.000000"));
-        city.setLongitude(new BigDecimal("4.000000"));
-        city.setTimezone("Europe/Amsterdam");
-        city = cityRepository.save(city);
         place.setCity(city);
         place.setName("Test place");
         place.setLatitude(new BigDecimal("52.000001"));
         place.setLongitude(new BigDecimal("4.000001"));
-        place = placeRepository.save(place);
+        place = placeRepository.saveAndFlush(place);
 
-        PlaceOpeningHours morning = openingHours(place, LocalTime.of(9, 0), LocalTime.of(12, 0));
-        PlaceOpeningHours evening = openingHours(place, LocalTime.of(14, 0), LocalTime.of(18, 0));
+        openingHoursRepository.saveAndFlush(openingHours(place, LocalTime.of(9, 0), LocalTime.of(12, 0)));
+        openingHoursRepository.saveAndFlush(openingHours(place, LocalTime.of(14, 0), LocalTime.of(18, 0)));
 
-        assertThat(morning.getDayOfWeek()).isEqualTo(evening.getDayOfWeek());
-        assertThat(morning.getOpeningTime()).isBefore(morning.getClosingTime());
-        assertThat(evening.getOpeningTime()).isBefore(evening.getClosingTime());
+        assertThat(openingHoursRepository.findAll()).hasSize(2);
+    }
+
+    private City city(String name, String latitude, String longitude) {
+        City city = new City();
+        city.setName(name);
+        city.setCountryCode("NL");
+        city.setLatitude(new BigDecimal(latitude));
+        city.setLongitude(new BigDecimal(longitude));
+        city.setTimezone("Europe/Amsterdam");
+        return cityRepository.saveAndFlush(city);
     }
 
     private PlaceOpeningHours openingHours(Place place, LocalTime opening, LocalTime closing) {
