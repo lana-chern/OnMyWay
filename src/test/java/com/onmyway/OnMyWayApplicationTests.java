@@ -42,12 +42,8 @@ class OnMyWayApplicationTests {
     void savesPlaceWithCityAndPersistsCoreFields() {
         City city = city("Amsterdam", "52.367600", "4.904100");
 
-        Place place = new Place();
-        place.setCity(city);
-        place.setName("Rijksmuseum");
+        Place place = placeEntity(city, "Rijksmuseum", "52.360000", "4.885200");
         place.setDescription("Museum");
-        place.setLatitude(new BigDecimal("52.360000"));
-        place.setLongitude(new BigDecimal("4.885200"));
         place.setStatus(PlaceStatus.PUBLISHED);
 
         Place saved = placeRepository.saveAndFlush(place);
@@ -61,7 +57,7 @@ class OnMyWayApplicationTests {
     @Test
     void persistsPlaceChildrenThroughCascade() {
         City city = city("Amsterdam", "52.367600", "4.904100");
-        Place place = place(city, "Rijksmuseum", "52.360000", "4.885200");
+        Place place = placeEntity(city, "Rijksmuseum", "52.360000", "4.885200");
 
         PlacePhoto photo = new PlacePhoto();
         photo.setPlace(place);
@@ -89,7 +85,8 @@ class OnMyWayApplicationTests {
     @Test
     void persistsMultipleOpeningIntervalsForSameDay() {
         City city = city("Test city", "52.000000", "4.000000");
-        Place place = place(city, "Test place", "52.000001", "4.000001");
+        Place place = placeEntity(city, "Test place", "52.000001", "4.000001");
+        placeRepository.saveAndFlush(place);
 
         openingHoursRepository.saveAndFlush(openingHours(place, LocalTime.of(9, 0), LocalTime.of(12, 0)));
         openingHoursRepository.saveAndFlush(openingHours(place, LocalTime.of(14, 0), LocalTime.of(18, 0)));
@@ -107,13 +104,13 @@ class OnMyWayApplicationTests {
         return cityRepository.saveAndFlush(city);
     }
 
-    private Place place(City city, String name, String latitude, String longitude) {
+    private Place placeEntity(City city, String name, String latitude, String longitude) {
         Place place = new Place();
         place.setCity(city);
         place.setName(name);
         place.setLatitude(new BigDecimal(latitude));
         place.setLongitude(new BigDecimal(longitude));
-        return placeRepository.saveAndFlush(place);
+        return place;
     }
 
     private PlaceOpeningHours openingHours(Place place, LocalTime opening, LocalTime closing) {
