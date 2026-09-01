@@ -7,6 +7,8 @@ import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 
 @Getter
 @Setter
@@ -14,7 +16,8 @@ import java.time.Instant;
 @Entity
 @Table(name = "places")
 public class Place {
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @ManyToOne(optional = false, fetch = FetchType.LAZY)
@@ -43,6 +46,23 @@ public class Place {
     @Column(nullable = false)
     private Instant updatedAt;
 
-    @PrePersist void prePersist() { createdAt = updatedAt = Instant.now(); }
-    @PreUpdate void preUpdate() { updatedAt = Instant.now(); }
+    @OneToMany(mappedBy = "place", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("position ASC")
+    private List<PlacePhoto> photos = new ArrayList<>();
+
+    @OneToMany(mappedBy = "place", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<PlaceContact> contacts = new ArrayList<>();
+
+    @OneToMany(mappedBy = "place", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<PlaceOpeningHours> openingHours = new ArrayList<>();
+
+    @PrePersist
+    void prePersist() {
+        createdAt = updatedAt = Instant.now();
+    }
+
+    @PreUpdate
+    void preUpdate() {
+        updatedAt = Instant.now();
+    }
 }
