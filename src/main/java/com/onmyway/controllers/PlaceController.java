@@ -4,7 +4,6 @@ import com.onmyway.api.PlaceService;
 import com.onmyway.api.dto.CreatePlaceRequest;
 import com.onmyway.api.dto.PlaceResponse;
 import com.onmyway.api.dto.UpdatePlaceRequest;
-import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -16,28 +15,20 @@ import java.util.List;
 public class PlaceController {
     private final PlaceService placeService;
 
-    public PlaceController(PlaceService placeService) {
-        this.placeService = placeService;
-    }
+    public PlaceController(PlaceService placeService) { this.placeService = placeService; }
 
     @GetMapping
-    public List<PlaceResponse> findPublished(@RequestParam Long cityId) {
-        return placeService.findPublished(cityId);
-    }
+    public List<PlaceResponse> findPublished(@RequestParam Long cityId) { return placeService.findPublished(cityId); }
 
     @GetMapping("/{id}")
-    public PlaceResponse findById(@PathVariable Long id) {
-        return placeService.findById(id);
-    }
+    public PlaceResponse findById(@PathVariable Long id) { return placeService.findById(id); }
 
     @PostMapping
-    public ResponseEntity<PlaceResponse> create(@Valid @RequestBody CreatePlaceRequest request) {
+    public ResponseEntity<PlaceResponse> create(@RequestBody CreatePlaceRequest request) {
         PlaceResponse response = placeService.create(request);
         return ResponseEntity.created(URI.create("/api/places/" + response.id())).body(response);
     }
 
     @PutMapping("/{id}")
-    public PlaceResponse update(@PathVariable Long id, @Valid @RequestBody UpdatePlaceRequest request) {
-        return placeService.update(id, request);
-    }
+    public PlaceResponse update(@PathVariable Long id, @RequestBody UpdatePlaceRequest request) { return placeService.update(id, request); }
 }
