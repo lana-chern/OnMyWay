@@ -26,13 +26,13 @@ class PlaceControllerTest {
 
     @Test
     void createsPlace() throws Exception {
-        City city = cityRepository.saveAndFlush(city());
+        City city = city("Amsterdam Create");
         String body = String.format(
                 "{\"cityId\":%d,\"name\":\"Rijksmuseum\",\"description\":\"Museum\",\"latitude\":52.360000,\"longitude\":4.885200," +
                 "\"photos\":[{\"url\":\"https://example.com/photo.jpg\",\"position\":0}]," +
                 "\"contacts\":[{\"type\":\"WEBSITE\",\"value\":\"https://example.com\"}]," +
                 "\"openingHours\":[{\"dayOfWeek\":\"MONDAY\",\"openingTime\":\"09:00\",\"closingTime\":\"18:00\",\"closed\":false}]}",
-                city.getId());
+                cityRepository.saveAndFlush(city).getId());
 
         mockMvc.perform(post("/api/places").contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isCreated())
@@ -43,7 +43,7 @@ class PlaceControllerTest {
 
     @Test
     void rejectsInvalidCoordinates() throws Exception {
-        City city = cityRepository.saveAndFlush(city());
+        City city = cityRepository.saveAndFlush(city("Amsterdam Validation"));
         String body = String.format(
                 "{\"cityId\":%d,\"name\":\"Bad\",\"latitude\":100,\"longitude\":4.9}",
                 city.getId());
@@ -55,7 +55,7 @@ class PlaceControllerTest {
 
     @Test
     void returnsOnlyPublishedPlacesForCity() throws Exception {
-        City city = cityRepository.saveAndFlush(city());
+        City city = cityRepository.saveAndFlush(city("Amsterdam Published"));
         placeRepository.saveAndFlush(place(city, "Draft", PlaceStatus.DRAFT));
         placeRepository.saveAndFlush(place(city, "Published", PlaceStatus.PUBLISHED));
 
@@ -65,15 +65,23 @@ class PlaceControllerTest {
                 .andExpect(jsonPath("$[0].name").value("Published"));
     }
 
-    private City city() {
-        City city = new City(); city.setName("Amsterdam"); city.setCountryCode("NL");
-        city.setLatitude(new BigDecimal("52.367600")); city.setLongitude(new BigDecimal("4.904100")); city.setTimezone("Europe/Amsterdam");
+    private City city(String name) {
+        City city = new City();
+        city.setName(name);
+        city.setCountryCode("NL");
+        city.setLatitude(new BigDecimal("52.367600"));
+        city.setLongitude(new BigDecimal("4.904100"));
+        city.setTimezone("Europe/Amsterdam");
         return city;
     }
 
     private Place place(City city, String name, PlaceStatus status) {
-        Place place = new Place(); place.setCity(city); place.setName(name); place.setStatus(status);
-        place.setLatitude(new BigDecimal("52.360000")); place.setLongitude(new BigDecimal("4.885200"));
+        Place place = new Place();
+        place.setCity(city);
+        place.setName(name);
+        place.setStatus(status);
+        place.setLatitude(new BigDecimal("52.360000"));
+        place.setLongitude(new BigDecimal("4.885200"));
         return place;
     }
 }
