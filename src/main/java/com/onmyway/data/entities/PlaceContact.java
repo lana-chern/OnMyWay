@@ -22,6 +22,6 @@ public class PlaceContact {
     @Column(nullable = false)
     private PlaceContactType type;
 
-    @Column(nullable = false)
+    @Column(name = "contact_value", nullable = false)
     private String value;
 }
