@@ -11,15 +11,22 @@ import java.math.BigDecimal;
 @Setter
 @NoArgsConstructor
 @Entity
-@Table(name = "cities")
+@Table(
+        name = "cities",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_city_name_country",
+                columnNames = {"name", "country_code"}
+        )
+)
 public class City {
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @Column(nullable = false)
     private String name;
 
-    @Column(nullable = false, length = 2)
+    @Column(name = "country_code", nullable = false, length = 2)
     private String countryCode;
 
     @Column(nullable = false, precision = 9, scale = 6)
