@@ -27,12 +27,12 @@ class PlaceControllerTest {
     @Test
     void createsPlace() throws Exception {
         City city = cityRepository.saveAndFlush(city());
-        String body = """
-                {"cityId":%d,"name":"Rijksmuseum","description":"Museum","latitude":52.360000,"longitude":4.885200,
-                 "photos":[{"url":"https://example.com/photo.jpg","position":0}],
-                 "contacts":[{"type":"WEBSITE","value":"https://example.com"}],
-                 "openingHours":[{"dayOfWeek":"MONDAY","openingTime":"09:00","closingTime":"18:00","closed":false}]}
-                """.formatted(city.getId());
+        String body = String.format(
+                "{\"cityId\":%d,\"name\":\"Rijksmuseum\",\"description\":\"Museum\",\"latitude\":52.360000,\"longitude\":4.885200," +
+                "\"photos\":[{\"url\":\"https://example.com/photo.jpg\",\"position\":0}]," +
+                "\"contacts\":[{\"type\":\"WEBSITE\",\"value\":\"https://example.com\"}]," +
+                "\"openingHours\":[{\"dayOfWeek\":\"MONDAY\",\"openingTime\":\"09:00\",\"closingTime\":\"18:00\",\"closed\":false}]}",
+                city.getId());
 
         mockMvc.perform(post("/api/places").contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isCreated())
@@ -44,7 +44,9 @@ class PlaceControllerTest {
     @Test
     void rejectsInvalidCoordinates() throws Exception {
         City city = cityRepository.saveAndFlush(city());
-        String body = """{"cityId":%d,"name":"Bad","latitude":100,"longitude":4.9}""".formatted(city.getId());
+        String body = String.format(
+                "{\"cityId\":%d,\"name\":\"Bad\",\"latitude\":100,\"longitude\":4.9}",
+                city.getId());
 
         mockMvc.perform(post("/api/places").contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isBadRequest())
