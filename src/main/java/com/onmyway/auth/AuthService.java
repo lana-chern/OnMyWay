@@ -13,6 +13,7 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.util.Locale;
 import java.util.Set;
 
 @Service
@@ -31,7 +32,7 @@ public class AuthService {
 
     public CurrentUserResponse register(RegisterRequest request) {
         validateRegisterRequest(request);
-        String email = request.email().trim().toLowerCase();
+        String email = request.email().trim().toLowerCase(Locale.ROOT);
 
         if (userRepository.existsByEmailIgnoreCase(email)) {
             throw new IllegalArgumentException("Email is already registered");
@@ -49,7 +50,7 @@ public class AuthService {
 
     public CurrentUserResponse login(LoginRequest request) {
         validateLoginRequest(request);
-        String email = request.email().trim().toLowerCase();
+        String email = request.email().trim().toLowerCase(Locale.ROOT);
 
         User user = userRepository.findByEmailIgnoreCase(email)
                 .orElseThrow(() -> new IllegalArgumentException("Invalid email or password"));
