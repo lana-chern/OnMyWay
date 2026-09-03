@@ -1,5 +1,6 @@
 package com.onmyway.controllers;
 
+import com.onmyway.data.entities.Role;
 import com.onmyway.data.entities.User;
 import com.onmyway.data.repositories.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -10,6 +11,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -43,10 +46,11 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.id").isNumber())
                 .andExpect(jsonPath("$.email").value("test@example.com"))
                 .andExpect(jsonPath("$.displayName").value("Alice"))
-                .andExpect(jsonPath("$.roles[0]").value("USER"));
+                .andExpect(jsonPath("$.roles").isArray())
+                .andExpect(jsonPath("$.roles", hasItem(Role.USER.name())));
 
         User savedUser = userRepository.findByEmailIgnoreCase("test@example.com").orElseThrow();
-        org.assertj.core.api.Assertions.assertThat(savedUser.getPasswordHash()).isNotEqualTo("password123");
+        assertThat(savedUser.getPasswordHash()).isNotEqualTo("password123");
     }
 
     @Test
@@ -55,7 +59,7 @@ class AuthControllerTest {
         existingUser.setEmail("test@example.com");
         existingUser.setPasswordHash("encoded-password");
         existingUser.setDisplayName("Existing");
-        existingUser.getRoles().add(com.onmyway.data.entities.Role.USER);
+        existingUser.getRoles().add(Role.USER);
         userRepository.saveAndFlush(existingUser);
 
         mockMvc.perform(post("/api/auth/register")
