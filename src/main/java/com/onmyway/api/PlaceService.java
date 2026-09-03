@@ -127,8 +127,10 @@ public class PlaceService {
                 if (hours.openingTime() != null || hours.closingTime() != null) {
                     throw new IllegalArgumentException("Closed opening hours must not contain times");
                 }
-            } else if (hours.openingTime() == null || hours.closingTime() == null || !hours.openingTime().isBefore(hours.closingTime())) {
-                throw new IllegalArgumentException("Opening time must be before closing time for an open interval");
+            } else {
+                if (hours.openingTime() == null || hours.closingTime() == null || !hours.openingTime().isBefore(hours.closingTime())) {
+                    throw new IllegalArgumentException("Opening time must be before closing time for an open interval");
+                }
             }
         }
     }
