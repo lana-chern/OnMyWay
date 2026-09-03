@@ -2,6 +2,7 @@ package com.onmyway.controllers;
 
 import com.onmyway.auth.AuthService;
 import com.onmyway.auth.api.CurrentUserResponse;
+import com.onmyway.auth.api.LoginRequest;
 import com.onmyway.auth.api.RegisterRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -22,5 +23,10 @@ public class AuthController {
     @PostMapping("/register")
     public ResponseEntity<CurrentUserResponse> register(@RequestBody RegisterRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(authService.register(request));
+    }
+
+    @PostMapping("/login")
+    public ResponseEntity<CurrentUserResponse> login(@RequestBody LoginRequest request) {
+        return ResponseEntity.ok(authService.login(request));
     }
 }
