@@ -2,6 +2,7 @@ package com.onmyway.controllers;
 
 import com.onmyway.data.entities.Role;
 import com.onmyway.data.entities.User;
+import com.onmyway.data.entities.UserStatus;
 import com.onmyway.data.repositories.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -54,6 +55,63 @@ class AuthControllerTest {
     }
 
     @Test
+    void logsInWithValidCredentials() throws Exception {
+        registerUser("test@example.com", "password123", "Alice");
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "TEST@example.com",
+                                  "password": "password123"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.id").isNumber())
+                .andExpect(jsonPath("$.email").value("test@example.com"))
+                .andExpect(jsonPath("$.displayName").value("Alice"))
+                .andExpect(jsonPath("$.roles").isArray())
+                .andExpect(jsonPath("$.roles", hasItem(Role.USER.name())));
+    }
+
+    @Test
+    void rejectsInvalidLoginCredentials() throws Exception {
+        registerUser("test@example.com", "password123", "Alice");
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "test@example.com",
+                                  "password": "wrong-password"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title").value("Invalid request"))
+                .andExpect(jsonPath("$.detail").value("Invalid email or password"));
+    }
+
+    @Test
+    void rejectsBlockedUserLogin() throws Exception {
+        User user = registerUser("test@example.com", "password123", "Alice");
+        user.setStatus(UserStatus.BLOCKED);
+        userRepository.saveAndFlush(user);
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "test@example.com",
+                                  "password": "password123"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title").value("Invalid request"))
+                .andExpect(jsonPath("$.detail").value("User account is not active"));
+    }
+
+    @Test
     void rejectsDuplicateEmail() throws Exception {
         User existingUser = new User();
         existingUser.setEmail("test@example.com");
@@ -90,5 +148,20 @@ class AuthControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.title").value("Invalid request"))
                 .andExpect(jsonPath("$.detail").value("Email is required"));
+    }
+
+    private User registerUser(String email, String password, String displayName) throws Exception {
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "%s",
+                                  "password": "%s",
+                                  "displayName": "%s"
+                                }
+                                """.formatted(email, password, displayName)))
+                .andExpect(status().isCreated());
+
+        return userRepository.findByEmailIgnoreCase(email).orElseThrow();
     }
 }
