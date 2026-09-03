@@ -8,6 +8,8 @@ import com.onmyway.data.repositories.UserRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.util.Set;
+
 @Service
 public class AuthService {
     private final UserRepository userRepository;
