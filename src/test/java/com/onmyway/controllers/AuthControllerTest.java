@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -19,6 +20,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@TestPropertySource(properties = "omw.jwt.secret=MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=")
 class AuthControllerTest {
     @Autowired
     MockMvc mockMvc;
@@ -55,7 +57,7 @@ class AuthControllerTest {
     }
 
     @Test
-    void logsInWithValidCredentials() throws Exception {
+    void logsInWithValidCredentialsAndReturnsJwt() throws Exception {
         registerUser("test@example.com", "password123", "Alice");
 
         mockMvc.perform(post("/api/auth/login")
@@ -68,11 +70,12 @@ class AuthControllerTest {
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$.id").isNumber())
-                .andExpect(jsonPath("$.email").value("test@example.com"))
-                .andExpect(jsonPath("$.displayName").value("Alice"))
-                .andExpect(jsonPath("$.roles").isArray())
-                .andExpect(jsonPath("$.roles", hasItem(Role.USER.name())));
+                .andExpect(jsonPath("$.accessToken").isString())
+                .andExpect(jsonPath("$.user.id").isNumber())
+                .andExpect(jsonPath("$.user.email").value("test@example.com"))
+                .andExpect(jsonPath("$.user.displayName").value("Alice"))
+                .andExpect(jsonPath("$.user.roles").isArray())
+                .andExpect(jsonPath("$.user.roles", hasItem(Role.USER.name())));
     }
 
     @Test
