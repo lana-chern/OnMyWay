@@ -1,8 +1,8 @@
 package com.onmyway.auth;
 
 import com.onmyway.data.entities.User;
+import com.onmyway.data.entities.UserStatus;
 import com.onmyway.data.repositories.UserRepository;
-import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -60,7 +60,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             String email = jwtService.extractEmail(token);
             User user = userRepository.findByEmailIgnoreCase(email).orElse(null);
-            if (user == null || !user.getStatus().name().equals("ACTIVE")) {
+            if (user == null || user.getStatus() != UserStatus.ACTIVE) {
                 response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid bearer token");
                 return;
             }
@@ -76,7 +76,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             SecurityContextHolder.getContext().setAuthentication(authentication);
 
             filterChain.doFilter(request, response);
-        } catch (JwtException | IllegalArgumentException exception) {
+        } catch (RuntimeException exception) {
             response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid bearer token");
         }
     }
