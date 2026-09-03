@@ -2,6 +2,7 @@ package com.onmyway.auth;
 
 import com.onmyway.auth.api.CurrentUserResponse;
 import com.onmyway.auth.api.LoginRequest;
+import com.onmyway.auth.api.LoginResponse;
 import com.onmyway.auth.api.RegisterRequest;
 import com.onmyway.data.entities.Role;
 import com.onmyway.data.entities.User;
@@ -36,6 +37,9 @@ class AuthServiceTest {
     @Mock
     AuthenticationManager authenticationManager;
 
+    @Mock
+    JwtService jwtService;
+
     @InjectMocks
     AuthService authService;
 
@@ -68,17 +72,20 @@ class AuthServiceTest {
     }
 
     @Test
-    void logsInWithValidCredentials() {
+    void logsInWithValidCredentialsAndGeneratesToken() {
         LoginRequest request = new LoginRequest("  Test@Example.COM  ", "password123");
         User user = user("test@example.com", "encoded-password", "Alice", UserStatus.ACTIVE);
         when(userRepository.findByEmailIgnoreCase("test@example.com")).thenReturn(java.util.Optional.of(user));
+        when(jwtService.generateToken("test@example.com")).thenReturn("jwt-token");
 
-        CurrentUserResponse response = authService.login(request);
+        LoginResponse response = authService.login(request);
 
-        assertThat(response.email()).isEqualTo("test@example.com");
-        assertThat(response.displayName()).isEqualTo("Alice");
-        assertThat(response.roles()).containsExactly(Role.USER);
+        assertThat(response.accessToken()).isEqualTo("jwt-token");
+        assertThat(response.user().email()).isEqualTo("test@example.com");
+        assertThat(response.user().displayName()).isEqualTo("Alice");
+        assertThat(response.user().roles()).containsExactly(Role.USER);
         verify(authenticationManager).authenticate(any(UsernamePasswordAuthenticationToken.class));
+        verify(jwtService).generateToken("test@example.com");
     }
 
     @Test
@@ -92,6 +99,8 @@ class AuthServiceTest {
         assertThatThrownBy(() -> authService.login(request))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Invalid email or password");
+
+        verifyNoInteractions(jwtService);
     }
 
     @Test
@@ -104,7 +113,7 @@ class AuthServiceTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("User account is not active");
 
-        verifyNoInteractions(authenticationManager);
+        verifyNoInteractions(authenticationManager, jwtService);
     }
 
     @Test
@@ -116,7 +125,7 @@ class AuthServiceTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Invalid email or password");
 
-        verifyNoInteractions(authenticationManager);
+        verifyNoInteractions(authenticationManager, jwtService);
     }
 
     @Test
