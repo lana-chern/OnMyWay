@@ -1,8 +1,5 @@
 package com.onmyway.auth;
 
-import com.onmyway.data.entities.User;
-import com.onmyway.data.entities.UserStatus;
-import com.onmyway.data.repositories.UserRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import org.junit.jupiter.api.AfterEach;
@@ -18,7 +15,6 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 
 import java.io.IOException;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
@@ -30,9 +26,6 @@ class JwtAuthenticationFilterTest {
 
     @Mock
     UserDetailsService userDetailsService;
-
-    @Mock
-    UserRepository userRepository;
 
     @Mock
     UserDetails userDetails;
@@ -53,14 +46,10 @@ class JwtAuthenticationFilterTest {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader("Authorization", "Bearer jwt-token");
         MockHttpServletResponse response = new MockHttpServletResponse();
-        User user = new User();
-        user.setEmail("test@example.com");
-        user.setStatus(UserStatus.ACTIVE);
-
         when(jwtService.isValid("jwt-token")).thenReturn(true);
         when(jwtService.extractEmail("jwt-token")).thenReturn("test@example.com");
-        when(userRepository.findByEmailIgnoreCase("test@example.com")).thenReturn(Optional.of(user));
         when(userDetailsService.loadUserByUsername("test@example.com")).thenReturn(userDetails);
+        when(userDetails.isEnabled()).thenReturn(true);
 
         filter.doFilter(request, response, filterChain);
 
@@ -80,6 +69,23 @@ class JwtAuthenticationFilterTest {
 
         assertThat(response.getStatus()).isEqualTo(401);
         assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
-        verifyNoInteractions(userRepository, userDetailsService, filterChain);
+        verifyNoInteractions(userDetailsService, filterChain);
+    }
+
+    @Test
+    void rejectsTokenForDisabledUser() throws ServletException, IOException {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("Authorization", "Bearer jwt-token");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        when(jwtService.isValid("jwt-token")).thenReturn(true);
+        when(jwtService.extractEmail("jwt-token")).thenReturn("test@example.com");
+        when(userDetailsService.loadUserByUsername("test@example.com")).thenReturn(userDetails);
+        when(userDetails.isEnabled()).thenReturn(false);
+
+        filter.doFilter(request, response, filterChain);
+
+        assertThat(response.getStatus()).isEqualTo(401);
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+        verifyNoInteractions(filterChain);
     }
 }
