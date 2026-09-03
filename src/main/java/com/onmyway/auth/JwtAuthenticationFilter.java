@@ -1,8 +1,5 @@
 package com.onmyway.auth;
 
-import com.onmyway.data.entities.User;
-import com.onmyway.data.entities.UserStatus;
-import com.onmyway.data.repositories.UserRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -21,16 +18,10 @@ import java.io.IOException;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final JwtService jwtService;
     private final UserDetailsService userDetailsService;
-    private final UserRepository userRepository;
 
-    public JwtAuthenticationFilter(
-            JwtService jwtService,
-            UserDetailsService userDetailsService,
-            UserRepository userRepository
-    ) {
+    public JwtAuthenticationFilter(JwtService jwtService, UserDetailsService userDetailsService) {
         this.jwtService = jwtService;
         this.userDetailsService = userDetailsService;
-        this.userRepository = userRepository;
     }
 
     @Override
@@ -59,13 +50,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             }
 
             String email = jwtService.extractEmail(token);
-            User user = userRepository.findByEmailIgnoreCase(email).orElse(null);
-            if (user == null || user.getStatus() != UserStatus.ACTIVE) {
+            UserDetails userDetails = userDetailsService.loadUserByUsername(email);
+            if (!userDetails.isEnabled()) {
                 response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid bearer token");
                 return;
             }
 
-            UserDetails userDetails = userDetailsService.loadUserByUsername(email);
             UsernamePasswordAuthenticationToken authentication =
                     new UsernamePasswordAuthenticationToken(
                             userDetails,
