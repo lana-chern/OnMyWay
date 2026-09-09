@@ -16,7 +16,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
@@ -40,9 +39,6 @@ class AuthServiceTest {
 
     @Mock
     JwtService jwtService;
-
-    @Mock
-    Authentication authentication;
 
     @InjectMocks
     AuthService authService;
@@ -95,11 +91,9 @@ class AuthServiceTest {
     @Test
     void returnsCurrentActiveUser() {
         User user = user("test@example.com", "encoded-password", "Alice", UserStatus.ACTIVE);
-        when(authentication.isAuthenticated()).thenReturn(true);
-        when(authentication.getName()).thenReturn("test@example.com");
         when(userRepository.findByEmailIgnoreCase("test@example.com")).thenReturn(java.util.Optional.of(user));
 
-        CurrentUserResponse response = authService.currentUser(authentication);
+        CurrentUserResponse response = authService.currentUser("test@example.com");
 
         assertThat(response.id()).isEqualTo(1L);
         assertThat(response.email()).isEqualTo("test@example.com");
@@ -108,23 +102,10 @@ class AuthServiceTest {
     }
 
     @Test
-    void rejectsUnauthenticatedCurrentUser() {
-        when(authentication.isAuthenticated()).thenReturn(false);
-
-        assertThatThrownBy(() -> authService.currentUser(authentication))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Authentication is required");
-
-        verifyNoInteractions(userRepository);
-    }
-
-    @Test
     void rejectsMissingCurrentUser() {
-        when(authentication.isAuthenticated()).thenReturn(true);
-        when(authentication.getName()).thenReturn("missing@example.com");
         when(userRepository.findByEmailIgnoreCase("missing@example.com")).thenReturn(java.util.Optional.empty());
 
-        assertThatThrownBy(() -> authService.currentUser(authentication))
+        assertThatThrownBy(() -> authService.currentUser("missing@example.com"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("User not found");
     }
@@ -132,11 +113,9 @@ class AuthServiceTest {
     @Test
     void rejectsInactiveCurrentUser() {
         User user = user("test@example.com", "encoded-password", "Alice", UserStatus.BLOCKED);
-        when(authentication.isAuthenticated()).thenReturn(true);
-        when(authentication.getName()).thenReturn("test@example.com");
         when(userRepository.findByEmailIgnoreCase("test@example.com")).thenReturn(java.util.Optional.of(user));
 
-        assertThatThrownBy(() -> authService.currentUser(authentication))
+        assertThatThrownBy(() -> authService.currentUser("test@example.com"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("User account is not active");
     }
