@@ -21,7 +21,7 @@ public class JwtService {
             @Value("${omw.jwt.expiration-ms:900000}") long expirationMs
     ) {
         this.signingKey = createSigningKey(secret);
-        this.expirationMs = expirationMs;
+        this.expirationMs = validateExpiration(expirationMs);
     }
 
     public String generateToken(String email) {
@@ -66,5 +66,12 @@ public class JwtService {
         } catch (IllegalArgumentException exception) {
             throw new IllegalStateException("OMW_JWT_SECRET must be a valid Base64-encoded key", exception);
         }
+    }
+
+    private long validateExpiration(long expirationMs) {
+        if (expirationMs <= 0) {
+            throw new IllegalStateException("OMW_JWT_EXPIRATION_MS must be greater than 0");
+        }
+        return expirationMs;
     }
 }
