@@ -84,7 +84,6 @@ class JwtAuthenticationFilterTest {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader("Authorization", "Bearer jwt-token");
         MockHttpServletResponse response = new MockHttpServletResponse();
-        when(jwtService.isValid("jwt-token")).thenReturn(true);
         when(jwtService.extractEmail("jwt-token")).thenReturn("test@example.com");
         when(userDetailsService.loadUserByUsername("test@example.com")).thenReturn(userDetails);
         when(userDetails.isEnabled()).thenReturn(true);
@@ -93,6 +92,8 @@ class JwtAuthenticationFilterTest {
 
         assertThat(SecurityContextHolder.getContext().getAuthentication()).isNotNull();
         assertThat(SecurityContextHolder.getContext().getAuthentication().getPrincipal()).isSameAs(userDetails);
+        verify(jwtService).extractEmail("jwt-token");
+        verify(userDetailsService).loadUserByUsername("test@example.com");
         verify(filterChain).doFilter(request, response);
     }
 
@@ -101,7 +102,7 @@ class JwtAuthenticationFilterTest {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader("Authorization", "Bearer invalid-token");
         MockHttpServletResponse response = new MockHttpServletResponse();
-        when(jwtService.isValid("invalid-token")).thenReturn(false);
+        when(jwtService.extractEmail("invalid-token")).thenThrow(new IllegalArgumentException("Invalid token"));
 
         filter.doFilter(request, response, filterChain);
 
@@ -115,7 +116,6 @@ class JwtAuthenticationFilterTest {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader("Authorization", "Bearer jwt-token");
         MockHttpServletResponse response = new MockHttpServletResponse();
-        when(jwtService.isValid("jwt-token")).thenReturn(true);
         when(jwtService.extractEmail("jwt-token")).thenReturn("test@example.com");
         when(userDetailsService.loadUserByUsername("test@example.com")).thenReturn(userDetails);
         when(userDetails.isEnabled()).thenReturn(false);
@@ -124,6 +124,7 @@ class JwtAuthenticationFilterTest {
 
         assertThat(response.getStatus()).isEqualTo(401);
         assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+        verify(userDetailsService).loadUserByUsername("test@example.com");
         verifyNoInteractions(filterChain);
     }
 }
