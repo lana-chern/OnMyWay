@@ -13,14 +13,14 @@ import java.util.Date;
 
 @Service
 public class JwtService {
-    private final String secret;
+    private final SecretKey signingKey;
     private final long expirationMs;
 
     public JwtService(
             @Value("${omw.jwt.secret:}") String secret,
             @Value("${omw.jwt.expiration-ms:900000}") long expirationMs
     ) {
-        this.secret = secret;
+        this.signingKey = createSigningKey(secret);
         this.expirationMs = expirationMs;
     }
 
@@ -31,7 +31,7 @@ public class JwtService {
                 .subject(email)
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plusMillis(expirationMs)))
-                .signWith(signingKey())
+                .signWith(signingKey)
                 .compact();
     }
 
@@ -50,14 +50,14 @@ public class JwtService {
 
     private Claims parseClaims(String token) {
         return Jwts.parser()
-                .verifyWith(signingKey())
+                .verifyWith(signingKey)
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
     }
 
-    private SecretKey signingKey() {
-        if (secret.isBlank()) {
+    private SecretKey createSigningKey(String secret) {
+        if (secret == null || secret.isBlank()) {
             throw new IllegalStateException("OMW_JWT_SECRET is not configured");
         }
 
