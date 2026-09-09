@@ -63,7 +63,7 @@ public class JwtService {
 
         try {
             return Keys.hmacShaKeyFor(Decoders.BASE64.decode(secret));
-        } catch (IllegalArgumentException exception) {
+        } catch (RuntimeException exception) {
             throw new IllegalStateException("OMW_JWT_SECRET must be a valid Base64-encoded key", exception);
         }
     }
