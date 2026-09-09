@@ -1,5 +1,6 @@
 package com.onmyway.controllers;
 
+import com.onmyway.auth.JwtService;
 import com.onmyway.data.entities.Role;
 import com.onmyway.data.entities.User;
 import com.onmyway.data.entities.UserStatus;
@@ -15,6 +16,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasItem;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -27,6 +29,9 @@ class AuthControllerTest {
 
     @Autowired
     UserRepository userRepository;
+
+    @Autowired
+    JwtService jwtService;
 
     @BeforeEach
     void cleanUsers() {
@@ -76,6 +81,47 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.user.displayName").value("Alice"))
                 .andExpect(jsonPath("$.user.roles").isArray())
                 .andExpect(jsonPath("$.user.roles", hasItem(Role.USER.name())));
+    }
+
+    @Test
+    void returnsCurrentUserWithValidJwt() throws Exception {
+        registerUser("test@example.com", "password123", "Alice");
+        String token = jwtService.generateToken("test@example.com");
+
+        mockMvc.perform(get("/api/auth/me")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.id").isNumber())
+                .andExpect(jsonPath("$.email").value("test@example.com"))
+                .andExpect(jsonPath("$.displayName").value("Alice"))
+                .andExpect(jsonPath("$.roles").isArray())
+                .andExpect(jsonPath("$.roles", hasItem(Role.USER.name())));
+    }
+
+    @Test
+    void rejectsCurrentUserWithoutAuthentication() throws Exception {
+        mockMvc.perform(get("/api/auth/me"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void rejectsCurrentUserWithInvalidJwt() throws Exception {
+        mockMvc.perform(get("/api/auth/me")
+                        .header("Authorization", "Bearer invalid-token"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void rejectsCurrentUserForBlockedUser() throws Exception {
+        User user = registerUser("test@example.com", "password123", "Alice");
+        user.setStatus(UserStatus.BLOCKED);
+        userRepository.saveAndFlush(user);
+        String token = jwtService.generateToken("test@example.com");
+
+        mockMvc.perform(get("/api/auth/me")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
