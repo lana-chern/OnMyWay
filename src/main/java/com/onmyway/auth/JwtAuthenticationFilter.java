@@ -64,10 +64,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     );
             authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
             SecurityContextHolder.getContext().setAuthentication(authentication);
-
-            filterChain.doFilter(request, response);
         } catch (RuntimeException exception) {
             response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid bearer token");
+            return;
         }
+
+        filterChain.doFilter(request, response);
     }
 }
