@@ -44,11 +44,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         try {
-            if (!jwtService.isValid(token)) {
-                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid bearer token");
-                return;
-            }
-
             String email = jwtService.extractEmail(token);
             UserDetails userDetails = userDetailsService.loadUserByUsername(email);
             if (!userDetails.isEnabled()) {
