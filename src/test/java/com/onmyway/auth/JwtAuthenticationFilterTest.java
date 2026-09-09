@@ -42,6 +42,44 @@ class JwtAuthenticationFilterTest {
     }
 
     @Test
+    void passesThroughWithoutAuthorizationHeader() throws ServletException, IOException {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilter(request, response, filterChain);
+
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+        verify(filterChain).doFilter(request, response);
+        verifyNoInteractions(jwtService, userDetailsService);
+    }
+
+    @Test
+    void passesThroughNonBearerAuthorizationHeader() throws ServletException, IOException {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("Authorization", "Basic credentials");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilter(request, response, filterChain);
+
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+        verify(filterChain).doFilter(request, response);
+        verifyNoInteractions(jwtService, userDetailsService);
+    }
+
+    @Test
+    void rejectsEmptyBearerToken() throws ServletException, IOException {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("Authorization", "Bearer ");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilter(request, response, filterChain);
+
+        assertThat(response.getStatus()).isEqualTo(401);
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+        verifyNoInteractions(jwtService, userDetailsService, filterChain);
+    }
+
+    @Test
     void authenticatesValidBearerToken() throws ServletException, IOException {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader("Authorization", "Bearer jwt-token");
