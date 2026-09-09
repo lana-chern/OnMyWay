@@ -10,7 +10,6 @@ import com.onmyway.data.entities.UserStatus;
 import com.onmyway.data.repositories.UserRepository;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -75,12 +74,7 @@ public class AuthService {
         return new LoginResponse(jwtService.generateToken(email), toResponse(user));
     }
 
-    public CurrentUserResponse currentUser(Authentication authentication) {
-        if (authentication == null || !authentication.isAuthenticated()) {
-            throw new IllegalArgumentException("Authentication is required");
-        }
-
-        String email = authentication.getName();
+    public CurrentUserResponse currentUser(String email) {
         User user = userRepository.findByEmailIgnoreCase(email)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
 
