@@ -3,7 +3,6 @@ package com.onmyway.auth;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 
 class JwtServiceTest {
@@ -21,10 +20,11 @@ class JwtServiceTest {
     }
 
     @Test
-    void rejectsExpiredToken() {
-        JwtService jwtService = new JwtService(SECRET, 900_000);
+    void rejectsExpiredToken() throws InterruptedException {
+        JwtService jwtService = new JwtService(SECRET, 1);
 
-        String token = new JwtService(SECRET, 0).generateToken("test@example.com");
+        String token = jwtService.generateToken("test@example.com");
+        Thread.sleep(10);
 
         assertThat(jwtService.isValid(token)).isFalse();
     }
