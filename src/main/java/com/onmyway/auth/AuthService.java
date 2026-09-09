@@ -2,6 +2,7 @@ package com.onmyway.auth;
 
 import com.onmyway.auth.api.CurrentUserResponse;
 import com.onmyway.auth.api.LoginRequest;
+import com.onmyway.auth.api.LoginResponse;
 import com.onmyway.auth.api.RegisterRequest;
 import com.onmyway.data.entities.Role;
 import com.onmyway.data.entities.User;
@@ -21,13 +22,16 @@ public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
+    private final JwtService jwtService;
 
     public AuthService(UserRepository userRepository,
                        PasswordEncoder passwordEncoder,
-                       AuthenticationManager authenticationManager) {
+                       AuthenticationManager authenticationManager,
+                       JwtService jwtService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.authenticationManager = authenticationManager;
+        this.jwtService = jwtService;
     }
 
     public CurrentUserResponse register(RegisterRequest request) {
@@ -48,7 +52,7 @@ public class AuthService {
         return toResponse(user);
     }
 
-    public CurrentUserResponse login(LoginRequest request) {
+    public LoginResponse login(LoginRequest request) {
         validateLoginRequest(request);
         String email = request.email().trim().toLowerCase(Locale.ROOT);
 
@@ -67,7 +71,7 @@ public class AuthService {
             throw new IllegalArgumentException("Invalid email or password");
         }
 
-        return toResponse(user);
+        return new LoginResponse(jwtService.generateToken(email), toResponse(user));
     }
 
     private void validateRegisterRequest(RegisterRequest request) {
