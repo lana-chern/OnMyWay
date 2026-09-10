@@ -72,6 +72,33 @@ class PlaceControllerTest {
     }
 
     @Test
+    void updatesPlaceForOrganizer() throws Exception {
+        City city = cityRepository.saveAndFlush(city("Amsterdam Update"));
+        Place place = placeRepository.saveAndFlush(place(city, "Old name", PlaceStatus.DRAFT));
+
+        mockMvc.perform(put("/api/places/{id}", place.getId())
+                        .with(user("organizer@example.com").roles("ORGANIZER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"New name\",\"description\":\"Updated description\",\"latitude\":52.370000,\"longitude\":4.900000}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("New name"))
+                .andExpect(jsonPath("$.description").value("Updated description"))
+                .andExpect(jsonPath("$.latitude").value(52.370000))
+                .andExpect(jsonPath("$.longitude").value(4.900000));
+    }
+
+    @Test
+    void rejectsPlaceUpdateForRegularUser() throws Exception {
+        Place place = placeRepository.saveAndFlush(place(city("Amsterdam Forbidden Update"), "Existing", PlaceStatus.DRAFT));
+
+        mockMvc.perform(put("/api/places/{id}", place.getId())
+                        .with(user("user@example.com").roles("USER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"New name\",\"latitude\":52.370000,\"longitude\":4.900000}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void returnsOnlyPublishedPlacesForCity() throws Exception {
         City city = cityRepository.saveAndFlush(city("Amsterdam Published"));
         placeRepository.saveAndFlush(place(city, "Draft", PlaceStatus.DRAFT));
