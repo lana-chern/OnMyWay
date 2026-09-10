@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -27,6 +28,7 @@ class PlaceControllerTest {
     @Autowired PlaceRepository placeRepository;
 
     @Test
+    @WithMockUser(roles = "ORGANIZER")
     void createsPlace() throws Exception {
         City city = city("Amsterdam Create");
         String body = String.format(
@@ -44,6 +46,7 @@ class PlaceControllerTest {
     }
 
     @Test
+    @WithMockUser(roles = "ORGANIZER")
     void rejectsInvalidCoordinates() throws Exception {
         City city = cityRepository.saveAndFlush(city("Amsterdam Validation"));
         String body = String.format(
@@ -53,6 +56,15 @@ class PlaceControllerTest {
         mockMvc.perform(post("/api/places").contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.title").value("Invalid request"));
+    }
+
+    @Test
+    @WithMockUser(roles = "USER")
+    void rejectsPlaceCreationForRegularUser() throws Exception {
+        mockMvc.perform(post("/api/places")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isForbidden());
     }
 
     @Test
