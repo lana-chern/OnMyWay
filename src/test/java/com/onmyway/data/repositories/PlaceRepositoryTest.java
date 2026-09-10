@@ -23,10 +23,14 @@ class PlaceRepositoryTest {
     @Autowired
     private PlaceOpeningHoursRepository openingHoursRepository;
 
+    @Autowired
+    private UserRepository userRepository;
+
     @Test
     void savesPlaceWithCityAndCoreFields() {
         City city = city("Amsterdam");
-        Place place = place(city, "Rijksmuseum");
+        User owner = testUser("owner-core@example.com");
+        Place place = place(city, owner, "Rijksmuseum");
         place.setDescription("Museum");
         place.setStatus(PlaceStatus.PUBLISHED);
 
@@ -34,6 +38,7 @@ class PlaceRepositoryTest {
 
         assertThat(saved.getId()).isNotNull();
         assertThat(saved.getCity().getId()).isEqualTo(city.getId());
+        assertThat(saved.getOwner().getId()).isEqualTo(owner.getId());
         assertThat(saved.getCreatedAt()).isNotNull();
         assertThat(saved.getUpdatedAt()).isNotNull();
     }
@@ -41,7 +46,8 @@ class PlaceRepositoryTest {
     @Test
     void persistsPlaceChildrenThroughCascade() {
         City city = city("Amsterdam");
-        Place place = place(city, "Rijksmuseum");
+        User owner = testUser("owner-children@example.com");
+        Place place = place(city, owner, "Rijksmuseum");
 
         PlacePhoto photo = new PlacePhoto();
         photo.setPlace(place);
@@ -68,13 +74,23 @@ class PlaceRepositoryTest {
     @Test
     void persistsMultipleOpeningIntervalsForSameDay() {
         City city = city("Test city");
-        Place place = place(city, "Test place");
+        User owner = testUser("owner-hours@example.com");
+        Place place = place(city, owner, "Test place");
         placeRepository.saveAndFlush(place);
 
         openingHoursRepository.saveAndFlush(openingHours(place, LocalTime.of(9, 0), LocalTime.of(12, 0)));
         openingHoursRepository.saveAndFlush(openingHours(place, LocalTime.of(14, 0), LocalTime.of(18, 0)));
 
         assertThat(openingHoursRepository.findAll()).hasSize(2);
+    }
+
+    private User testUser(String email) {
+        User user = new User();
+        user.setEmail(email);
+        user.setPasswordHash("test-password-hash");
+        user.setDisplayName("Test user");
+        user.getRoles().add(Role.ORGANIZER);
+        return userRepository.saveAndFlush(user);
     }
 
     private City city(String name) {
@@ -87,9 +103,10 @@ class PlaceRepositoryTest {
         return cityRepository.saveAndFlush(city);
     }
 
-    private Place place(City city, String name) {
+    private Place place(City city, User owner, String name) {
         Place place = new Place();
         place.setCity(city);
+        place.setOwner(owner);
         place.setName(name);
         place.setLatitude(new BigDecimal("52.360000"));
         place.setLongitude(new BigDecimal("4.885200"));

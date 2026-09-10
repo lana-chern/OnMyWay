@@ -3,8 +3,11 @@ package com.onmyway.controllers;
 import com.onmyway.data.entities.City;
 import com.onmyway.data.entities.Place;
 import com.onmyway.data.entities.PlaceStatus;
+import com.onmyway.data.entities.Role;
+import com.onmyway.data.entities.User;
 import com.onmyway.data.repositories.CityRepository;
 import com.onmyway.data.repositories.PlaceRepository;
+import com.onmyway.data.repositories.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -26,9 +29,11 @@ class PlaceControllerTest {
     @Autowired MockMvc mockMvc;
     @Autowired CityRepository cityRepository;
     @Autowired PlaceRepository placeRepository;
+    @Autowired UserRepository userRepository;
 
     @Test
     void createsPlace() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("organizer-create@example.com", Role.ORGANIZER));
         City city = city("Amsterdam Create");
         String body = String.format(
                 "{\"cityId\":%d,\"name\":\"Rijksmuseum\",\"description\":\"Museum\",\"latitude\":52.360000,\"longitude\":4.885200," +
@@ -38,7 +43,7 @@ class PlaceControllerTest {
                 cityRepository.saveAndFlush(city).getId());
 
         mockMvc.perform(post("/api/places")
-                        .with(user("organizer@example.com").roles("ORGANIZER"))
+                        .with(user(owner.getEmail()).roles("ORGANIZER"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isCreated())
@@ -49,13 +54,14 @@ class PlaceControllerTest {
 
     @Test
     void rejectsInvalidCoordinates() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("organizer-validation@example.com", Role.ORGANIZER));
         City city = cityRepository.saveAndFlush(city("Amsterdam Validation"));
         String body = String.format(
                 "{\"cityId\":%d,\"name\":\"Bad\",\"latitude\":100,\"longitude\":4.9}",
                 city.getId());
 
         mockMvc.perform(post("/api/places")
-                        .with(user("organizer@example.com").roles("ORGANIZER"))
+                        .with(user(owner.getEmail()).roles("ORGANIZER"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isBadRequest())
@@ -72,12 +78,13 @@ class PlaceControllerTest {
     }
 
     @Test
-    void updatesPlaceForOrganizer() throws Exception {
+    void updatesPlaceForOwner() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("organizer-update@example.com", Role.ORGANIZER));
         City city = cityRepository.saveAndFlush(city("Amsterdam Update"));
-        Place place = placeRepository.saveAndFlush(place(city, "Old name", PlaceStatus.DRAFT));
+        Place place = placeRepository.saveAndFlush(place(city, owner, "Old name", PlaceStatus.DRAFT));
 
         mockMvc.perform(put("/api/places/{id}", place.getId())
-                        .with(user("organizer@example.com").roles("ORGANIZER"))
+                        .with(user(owner.getEmail()).roles("ORGANIZER"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"New name\",\"description\":\"Updated description\",\"latitude\":52.370000,\"longitude\":4.900000}"))
                 .andExpect(status().isOk())
@@ -88,12 +95,14 @@ class PlaceControllerTest {
     }
 
     @Test
-    void rejectsPlaceUpdateForRegularUser() throws Exception {
+    void rejectsPlaceUpdateForAnotherOrganizer() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("organizer-owner@example.com", Role.ORGANIZER));
+        User anotherOrganizer = userRepository.saveAndFlush(testUser("organizer-another@example.com", Role.ORGANIZER));
         City city = cityRepository.saveAndFlush(city("Amsterdam Forbidden Update"));
-        Place place = placeRepository.saveAndFlush(place(city, "Existing", PlaceStatus.DRAFT));
+        Place place = placeRepository.saveAndFlush(place(city, owner, "Existing", PlaceStatus.DRAFT));
 
         mockMvc.perform(put("/api/places/{id}", place.getId())
-                        .with(user("user@example.com").roles("USER"))
+                        .with(user(anotherOrganizer.getEmail()).roles("ORGANIZER"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"New name\",\"latitude\":52.370000,\"longitude\":4.900000}"))
                 .andExpect(status().isForbidden());
@@ -101,14 +110,24 @@ class PlaceControllerTest {
 
     @Test
     void returnsOnlyPublishedPlacesForCity() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("organizer-published@example.com", Role.ORGANIZER));
         City city = cityRepository.saveAndFlush(city("Amsterdam Published"));
-        placeRepository.saveAndFlush(place(city, "Draft", PlaceStatus.DRAFT));
-        placeRepository.saveAndFlush(place(city, "Published", PlaceStatus.PUBLISHED));
+        placeRepository.saveAndFlush(place(city, owner, "Draft", PlaceStatus.DRAFT));
+        placeRepository.saveAndFlush(place(city, owner, "Published", PlaceStatus.PUBLISHED));
 
         mockMvc.perform(get("/api/places").param("cityId", city.getId().toString()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(1)))
                 .andExpect(jsonPath("$[0].name").value("Published"));
+    }
+
+    private User testUser(String email, Role role) {
+        User user = new User();
+        user.setEmail(email);
+        user.setPasswordHash("test-password-hash");
+        user.setDisplayName("Test user");
+        user.getRoles().add(role);
+        return user;
     }
 
     private City city(String name) {
@@ -121,9 +140,10 @@ class PlaceControllerTest {
         return city;
     }
 
-    private Place place(City city, String name, PlaceStatus status) {
+    private Place place(City city, User owner, String name, PlaceStatus status) {
         Place place = new Place();
         place.setCity(city);
+        place.setOwner(owner);
         place.setName(name);
         place.setStatus(status);
         place.setLatitude(new BigDecimal("52.360000"));
