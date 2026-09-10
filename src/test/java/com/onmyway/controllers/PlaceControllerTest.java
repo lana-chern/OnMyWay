@@ -10,12 +10,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
 
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -28,7 +28,6 @@ class PlaceControllerTest {
     @Autowired PlaceRepository placeRepository;
 
     @Test
-    @WithMockUser(roles = "ORGANIZER")
     void createsPlace() throws Exception {
         City city = city("Amsterdam Create");
         String body = String.format(
@@ -38,7 +37,10 @@ class PlaceControllerTest {
                 "\"openingHours\":[{\"dayOfWeek\":\"MONDAY\",\"openingTime\":\"09:00\",\"closingTime\":\"18:00\",\"closed\":false}]}",
                 cityRepository.saveAndFlush(city).getId());
 
-        mockMvc.perform(post("/api/places").contentType(MediaType.APPLICATION_JSON).content(body))
+        mockMvc.perform(post("/api/places")
+                        .with(user("organizer@example.com").roles("ORGANIZER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
                 .andExpect(status().isCreated())
                 .andExpect(header().string("Location", org.hamcrest.Matchers.matchesPattern("/api/places/[0-9]+")))
                 .andExpect(jsonPath("$.name").value("Rijksmuseum"))
@@ -46,22 +48,24 @@ class PlaceControllerTest {
     }
 
     @Test
-    @WithMockUser(roles = "ORGANIZER")
     void rejectsInvalidCoordinates() throws Exception {
         City city = cityRepository.saveAndFlush(city("Amsterdam Validation"));
         String body = String.format(
                 "{\"cityId\":%d,\"name\":\"Bad\",\"latitude\":100,\"longitude\":4.9}",
                 city.getId());
 
-        mockMvc.perform(post("/api/places").contentType(MediaType.APPLICATION_JSON).content(body))
+        mockMvc.perform(post("/api/places")
+                        .with(user("organizer@example.com").roles("ORGANIZER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.title").value("Invalid request"));
     }
 
     @Test
-    @WithMockUser(roles = "USER")
     void rejectsPlaceCreationForRegularUser() throws Exception {
         mockMvc.perform(post("/api/places")
+                        .with(user("user@example.com").roles("USER"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isForbidden());
