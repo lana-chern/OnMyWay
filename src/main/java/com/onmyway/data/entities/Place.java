@@ -24,6 +24,10 @@ public class Place {
     @JoinColumn(name = "city_id", nullable = false)
     private City city;
 
+    @ManyToOne(optional = false, fetch = FetchType.LAZY)
+    @JoinColumn(name = "owner_id", nullable = false)
+    private User owner;
+
     @Column(nullable = false)
     private String name;
 
