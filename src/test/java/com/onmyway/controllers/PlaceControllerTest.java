@@ -15,6 +15,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
 
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -36,7 +37,10 @@ class PlaceControllerTest {
                 "\"openingHours\":[{\"dayOfWeek\":\"MONDAY\",\"openingTime\":\"09:00\",\"closingTime\":\"18:00\",\"closed\":false}]}",
                 cityRepository.saveAndFlush(city).getId());
 
-        mockMvc.perform(post("/api/places").contentType(MediaType.APPLICATION_JSON).content(body))
+        mockMvc.perform(post("/api/places")
+                        .with(user("organizer@example.com").roles("ORGANIZER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
                 .andExpect(status().isCreated())
                 .andExpect(header().string("Location", org.hamcrest.Matchers.matchesPattern("/api/places/[0-9]+")))
                 .andExpect(jsonPath("$.name").value("Rijksmuseum"))
@@ -50,9 +54,49 @@ class PlaceControllerTest {
                 "{\"cityId\":%d,\"name\":\"Bad\",\"latitude\":100,\"longitude\":4.9}",
                 city.getId());
 
-        mockMvc.perform(post("/api/places").contentType(MediaType.APPLICATION_JSON).content(body))
+        mockMvc.perform(post("/api/places")
+                        .with(user("organizer@example.com").roles("ORGANIZER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.title").value("Invalid request"));
+    }
+
+    @Test
+    void rejectsPlaceCreationForRegularUser() throws Exception {
+        mockMvc.perform(post("/api/places")
+                        .with(user("user@example.com").roles("USER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void updatesPlaceForOrganizer() throws Exception {
+        City city = cityRepository.saveAndFlush(city("Amsterdam Update"));
+        Place place = placeRepository.saveAndFlush(place(city, "Old name", PlaceStatus.DRAFT));
+
+        mockMvc.perform(put("/api/places/{id}", place.getId())
+                        .with(user("organizer@example.com").roles("ORGANIZER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"New name\",\"description\":\"Updated description\",\"latitude\":52.370000,\"longitude\":4.900000}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("New name"))
+                .andExpect(jsonPath("$.description").value("Updated description"))
+                .andExpect(jsonPath("$.latitude").value(52.370000))
+                .andExpect(jsonPath("$.longitude").value(4.900000));
+    }
+
+    @Test
+    void rejectsPlaceUpdateForRegularUser() throws Exception {
+        City city = cityRepository.saveAndFlush(city("Amsterdam Forbidden Update"));
+        Place place = placeRepository.saveAndFlush(place(city, "Existing", PlaceStatus.DRAFT));
+
+        mockMvc.perform(put("/api/places/{id}", place.getId())
+                        .with(user("user@example.com").roles("USER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"New name\",\"latitude\":52.370000,\"longitude\":4.900000}"))
+                .andExpect(status().isForbidden());
     }
 
     @Test

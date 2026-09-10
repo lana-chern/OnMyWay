@@ -34,6 +34,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/api/auth/me").authenticated()
                         .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/places").hasRole("ORGANIZER")
+                        .requestMatchers(org.springframework.http.HttpMethod.PUT, "/api/places/{id}").hasRole("ORGANIZER")
                         .requestMatchers("/api/**").permitAll()
                         .anyRequest().permitAll()
                 )
