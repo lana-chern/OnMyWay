@@ -74,6 +74,17 @@ public class AuthService {
         return new LoginResponse(jwtService.generateToken(email), toResponse(user));
     }
 
+    public CurrentUserResponse currentUser(String email) {
+        User user = userRepository.findByEmailIgnoreCase(email)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+
+        if (user.getStatus() != UserStatus.ACTIVE) {
+            throw new IllegalArgumentException("User account is not active");
+        }
+
+        return toResponse(user);
+    }
+
     private void validateRegisterRequest(RegisterRequest request) {
         if (request == null) {
             throw new IllegalArgumentException("Registration request is required");

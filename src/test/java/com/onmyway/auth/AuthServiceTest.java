@@ -89,6 +89,38 @@ class AuthServiceTest {
     }
 
     @Test
+    void returnsCurrentActiveUser() {
+        User user = user("test@example.com", "encoded-password", "Alice", UserStatus.ACTIVE);
+        when(userRepository.findByEmailIgnoreCase("test@example.com")).thenReturn(java.util.Optional.of(user));
+
+        CurrentUserResponse response = authService.currentUser("test@example.com");
+
+        assertThat(response.id()).isEqualTo(1L);
+        assertThat(response.email()).isEqualTo("test@example.com");
+        assertThat(response.displayName()).isEqualTo("Alice");
+        assertThat(response.roles()).containsExactly(Role.USER);
+    }
+
+    @Test
+    void rejectsMissingCurrentUser() {
+        when(userRepository.findByEmailIgnoreCase("missing@example.com")).thenReturn(java.util.Optional.empty());
+
+        assertThatThrownBy(() -> authService.currentUser("missing@example.com"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("User not found");
+    }
+
+    @Test
+    void rejectsInactiveCurrentUser() {
+        User user = user("test@example.com", "encoded-password", "Alice", UserStatus.BLOCKED);
+        when(userRepository.findByEmailIgnoreCase("test@example.com")).thenReturn(java.util.Optional.of(user));
+
+        assertThatThrownBy(() -> authService.currentUser("test@example.com"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("User account is not active");
+    }
+
+    @Test
     void rejectsInvalidCredentials() {
         LoginRequest request = new LoginRequest("test@example.com", "wrong-password");
         User user = user("test@example.com", "encoded-password", "Alice", UserStatus.ACTIVE);
