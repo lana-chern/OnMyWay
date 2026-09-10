@@ -89,7 +89,8 @@ class PlaceControllerTest {
 
     @Test
     void rejectsPlaceUpdateForRegularUser() throws Exception {
-        Place place = placeRepository.saveAndFlush(place(city("Amsterdam Forbidden Update"), "Existing", PlaceStatus.DRAFT));
+        City city = cityRepository.saveAndFlush(city("Amsterdam Forbidden Update"));
+        Place place = placeRepository.saveAndFlush(place(city, "Existing", PlaceStatus.DRAFT));
 
         mockMvc.perform(put("/api/places/{id}", place.getId())
                         .with(user("user@example.com").roles("USER"))
