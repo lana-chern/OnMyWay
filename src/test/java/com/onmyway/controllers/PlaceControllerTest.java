@@ -33,7 +33,7 @@ class PlaceControllerTest {
 
     @Test
     void createsPlace() throws Exception {
-        User owner = userRepository.saveAndFlush(user("organizer-create@example.com", Role.ORGANIZER));
+        User owner = userRepository.saveAndFlush(testUser("organizer-create@example.com", Role.ORGANIZER));
         City city = city("Amsterdam Create");
         String body = String.format(
                 "{\"cityId\":%d,\"name\":\"Rijksmuseum\",\"description\":\"Museum\",\"latitude\":52.360000,\"longitude\":4.885200," +
@@ -54,7 +54,7 @@ class PlaceControllerTest {
 
     @Test
     void rejectsInvalidCoordinates() throws Exception {
-        User owner = userRepository.saveAndFlush(user("organizer-validation@example.com", Role.ORGANIZER));
+        User owner = userRepository.saveAndFlush(testUser("organizer-validation@example.com", Role.ORGANIZER));
         City city = cityRepository.saveAndFlush(city("Amsterdam Validation"));
         String body = String.format(
                 "{\"cityId\":%d,\"name\":\"Bad\",\"latitude\":100,\"longitude\":4.9}",
@@ -79,7 +79,7 @@ class PlaceControllerTest {
 
     @Test
     void updatesPlaceForOwner() throws Exception {
-        User owner = userRepository.saveAndFlush(user("organizer-update@example.com", Role.ORGANIZER));
+        User owner = userRepository.saveAndFlush(testUser("organizer-update@example.com", Role.ORGANIZER));
         City city = cityRepository.saveAndFlush(city("Amsterdam Update"));
         Place place = placeRepository.saveAndFlush(place(city, owner, "Old name", PlaceStatus.DRAFT));
 
@@ -96,8 +96,8 @@ class PlaceControllerTest {
 
     @Test
     void rejectsPlaceUpdateForAnotherOrganizer() throws Exception {
-        User owner = userRepository.saveAndFlush(user("organizer-owner@example.com", Role.ORGANIZER));
-        User anotherOrganizer = userRepository.saveAndFlush(user("organizer-another@example.com", Role.ORGANIZER));
+        User owner = userRepository.saveAndFlush(testUser("organizer-owner@example.com", Role.ORGANIZER));
+        User anotherOrganizer = userRepository.saveAndFlush(testUser("organizer-another@example.com", Role.ORGANIZER));
         City city = cityRepository.saveAndFlush(city("Amsterdam Forbidden Update"));
         Place place = placeRepository.saveAndFlush(place(city, owner, "Existing", PlaceStatus.DRAFT));
 
@@ -110,7 +110,7 @@ class PlaceControllerTest {
 
     @Test
     void returnsOnlyPublishedPlacesForCity() throws Exception {
-        User owner = userRepository.saveAndFlush(user("organizer-published@example.com", Role.ORGANIZER));
+        User owner = userRepository.saveAndFlush(testUser("organizer-published@example.com", Role.ORGANIZER));
         City city = cityRepository.saveAndFlush(city("Amsterdam Published"));
         placeRepository.saveAndFlush(place(city, owner, "Draft", PlaceStatus.DRAFT));
         placeRepository.saveAndFlush(place(city, owner, "Published", PlaceStatus.PUBLISHED));
@@ -121,7 +121,7 @@ class PlaceControllerTest {
                 .andExpect(jsonPath("$[0].name").value("Published"));
     }
 
-    private User user(String email, Role role) {
+    private User testUser(String email, Role role) {
         User user = new User();
         user.setEmail(email);
         user.setPasswordHash("test-password-hash");
