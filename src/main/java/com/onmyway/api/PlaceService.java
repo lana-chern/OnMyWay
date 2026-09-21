@@ -7,6 +7,7 @@ import com.onmyway.api.exception.ResourceNotFoundException;
 import com.onmyway.data.entities.*;
 import com.onmyway.data.repositories.CityRepository;
 import com.onmyway.data.repositories.PlaceRepository;
+import com.onmyway.data.repositories.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,10 +19,12 @@ import java.util.List;
 public class PlaceService {
     private final PlaceRepository placeRepository;
     private final CityRepository cityRepository;
+    private final UserRepository userRepository;
 
-    public PlaceService(PlaceRepository placeRepository, CityRepository cityRepository) {
+    public PlaceService(PlaceRepository placeRepository, CityRepository cityRepository, UserRepository userRepository) {
         this.placeRepository = placeRepository;
         this.cityRepository = cityRepository;
+        this.userRepository = userRepository;
     }
 
     @Transactional(readOnly = true)
@@ -42,19 +45,28 @@ public class PlaceService {
                 .orElseThrow(() -> new ResourceNotFoundException("Place %d not found".formatted(id)));
     }
 
-    public PlaceResponse create(CreatePlaceRequest request) {
+    public PlaceResponse create(CreatePlaceRequest request, String ownerEmail) {
         validateRequest(request.cityId(), request.name(), request.latitude(), request.longitude(), request.photos(), request.contacts(), request.openingHours());
         City city = cityRepository.findById(request.cityId())
                 .orElseThrow(() -> new ResourceNotFoundException("City %d not found".formatted(request.cityId())));
+        User owner = userRepository.findByEmailIgnoreCase(ownerEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
         Place place = new Place();
         place.setCity(city);
+        place.setOwner(owner);
         apply(place, request.name(), request.description(), request.latitude(), request.longitude(), request.photos(), request.contacts(), request.openingHours());
         return PlaceResponse.from(placeRepository.save(place));
     }
 
-    public PlaceResponse update(Long id, UpdatePlaceRequest request) {
+    public PlaceResponse update(Long id, UpdatePlaceRequest request, String ownerEmail) {
         validateRequest(id, request.name(), request.latitude(), request.longitude(), request.photos(), request.contacts(), request.openingHours());
         Place place = placeRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Place %d not found".formatted(id)));
+
+        if (place.getOwner() == null || !place.getOwner().getEmail().equalsIgnoreCase(ownerEmail)) {
+            throw new org.springframework.security.access.AccessDeniedException("You can update only your own places");
+        }
+
         apply(place, request.name(), request.description(), request.latitude(), request.longitude(), request.photos(), request.contacts(), request.openingHours());
         return PlaceResponse.from(place);
     }
@@ -66,19 +78,19 @@ public class PlaceService {
         place.getPhotos().clear();
         if (photos != null) {
             for (var request : photos) {
-            PlacePhoto photo = new PlacePhoto(); photo.setPlace(place); photo.setUrl(request.url()); photo.setPosition(request.position()); photo.setDescription(request.description()); place.getPhotos().add(photo);
+                PlacePhoto photo = new PlacePhoto(); photo.setPlace(place); photo.setUrl(request.url()); photo.setPosition(request.position()); photo.setDescription(request.description()); place.getPhotos().add(photo);
             }
         }
         place.getContacts().clear();
         if (contacts != null) {
             for (var request : contacts) {
-            PlaceContact contact = new PlaceContact(); contact.setPlace(place); contact.setType(request.type()); contact.setValue(request.value()); place.getContacts().add(contact);
+                PlaceContact contact = new PlaceContact(); contact.setPlace(place); contact.setType(request.type()); contact.setValue(request.value()); place.getContacts().add(contact);
             }
         }
         place.getOpeningHours().clear();
         if (openingHours != null) {
             for (var request : openingHours) {
-            PlaceOpeningHours hours = new PlaceOpeningHours(); hours.setPlace(place); hours.setDayOfWeek(request.dayOfWeek()); hours.setOpeningTime(request.openingTime()); hours.setClosingTime(request.closingTime()); hours.setClosed(request.closed()); place.getOpeningHours().add(hours);
+                PlaceOpeningHours hours = new PlaceOpeningHours(); hours.setPlace(place); hours.setDayOfWeek(request.dayOfWeek()); hours.setOpeningTime(request.openingTime()); hours.setClosingTime(request.closingTime()); hours.setClosed(request.closed()); place.getOpeningHours().add(hours);
             }
         }
     }
