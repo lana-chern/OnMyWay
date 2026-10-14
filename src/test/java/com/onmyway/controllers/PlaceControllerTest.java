@@ -18,6 +18,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -42,14 +43,20 @@ class PlaceControllerTest {
                 "\"openingHours\":[{\"dayOfWeek\":\"MONDAY\",\"openingTime\":\"09:00\",\"closingTime\":\"18:00\",\"closed\":false}]}",
                 cityRepository.saveAndFlush(city).getId());
 
-        mockMvc.perform(post("/api/places")
+        var result = mockMvc.perform(post("/api/places")
                         .with(user(owner.getEmail()).roles("ORGANIZER"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isCreated())
                 .andExpect(header().string("Location", org.hamcrest.Matchers.matchesPattern("/api/places/[0-9]+")))
                 .andExpect(jsonPath("$.name").value("Rijksmuseum"))
-                .andExpect(jsonPath("$.status").value("DRAFT"));
+                .andExpect(jsonPath("$.status").value("DRAFT"))
+                .andReturn();
+
+        String location = result.getResponse().getHeader("Location");
+        Long placeId = Long.valueOf(location.substring(location.lastIndexOf('/') + 1));
+        Place createdPlace = placeRepository.findById(placeId).orElseThrow();
+        assertThat(createdPlace.getOwner().getId()).isEqualTo(owner.getId());
     }
 
     @Test
