@@ -34,4 +34,11 @@ public class GlobalExceptionHandler {
         problem.setTitle("Invalid request");
         return problem;
     }
+
+    @ExceptionHandler(IllegalStateException.class)
+    ProblemDetail handleIllegalState(IllegalStateException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
+        problem.setTitle("Invalid state transition");
+        return problem;
+    }
 }
