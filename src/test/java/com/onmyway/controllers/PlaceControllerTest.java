@@ -19,6 +19,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
@@ -117,6 +118,28 @@ class PlaceControllerTest {
                 .andExpect(status().isForbidden());
     }
 
+
+    @Test
+    void authorizesPlaceUpdateByOwnerIdRatherThanEmail() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("organizer-id-owner@example.com", Role.ORGANIZER));
+        City city = cityRepository.saveAndFlush(city("Amsterdam Owner Id"));
+        Place place = placeRepository.saveAndFlush(place(city, owner, "Original name", PlaceStatus.DRAFT));
+        OnMyWayUserDetails principalWithDifferentEmail = new OnMyWayUserDetails(
+                owner.getId(),
+                "different-email@example.com",
+                owner.getPasswordHash(),
+                List.of(new SimpleGrantedAuthority("ROLE_ORGANIZER")),
+                true
+        );
+
+        mockMvc.perform(put("/api/places/{id}", place.getId())
+                        .with(user(principalWithDifferentEmail))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Updated by id\",\"latitude\":52.370000,\"longitude\":4.900000}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Updated by id"));
+    }
+
     @Test
     void returnsOnlyPublishedPlacesForCity() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("organizer-published@example.com", Role.ORGANIZER));
@@ -129,7 +152,6 @@ class PlaceControllerTest {
                 .andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(1)))
                 .andExpect(jsonPath("$[0].name").value("Published"));
     }
-
 
     private OnMyWayUserDetails principal(User user) {
         return new OnMyWayUserDetails(
