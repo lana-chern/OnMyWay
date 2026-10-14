@@ -28,20 +28,11 @@ import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
-    @Mock
-    UserRepository userRepository;
-
-    @Mock
-    PasswordEncoder passwordEncoder;
-
-    @Mock
-    AuthenticationManager authenticationManager;
-
-    @Mock
-    JwtService jwtService;
-
-    @InjectMocks
-    AuthService authService;
+    @Mock UserRepository userRepository;
+    @Mock PasswordEncoder passwordEncoder;
+    @Mock AuthenticationManager authenticationManager;
+    @Mock JwtService jwtService;
+    @InjectMocks AuthService authService;
 
     @Test
     void registersUserWithNormalizedEmailAndUserRole() {
@@ -53,14 +44,11 @@ class AuthServiceTest {
             user.setId(1L);
             return user;
         });
-
         CurrentUserResponse response = authService.register(request);
-
         assertThat(response.id()).isEqualTo(1L);
         assertThat(response.email()).isEqualTo("test@example.com");
         assertThat(response.displayName()).isEqualTo("Alice");
         assertThat(response.roles()).containsExactly(Role.USER);
-
         ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
         verify(userRepository).save(captor.capture());
         User savedUser = captor.getValue();
@@ -72,29 +60,25 @@ class AuthServiceTest {
     }
 
     @Test
-    void logsInWithValidCredentialsAndGeneratesToken() {
+    void logsInWithValidCredentialsAndGeneratesTokenUsingUserId() {
         LoginRequest request = new LoginRequest("  Test@Example.COM  ", "password123");
         User user = user("test@example.com", "encoded-password", "Alice", UserStatus.ACTIVE);
         when(userRepository.findByEmailIgnoreCase("test@example.com")).thenReturn(java.util.Optional.of(user));
-        when(jwtService.generateToken("test@example.com")).thenReturn("jwt-token");
-
+        when(jwtService.generateToken(1L)).thenReturn("jwt-token");
         LoginResponse response = authService.login(request);
-
         assertThat(response.accessToken()).isEqualTo("jwt-token");
         assertThat(response.user().email()).isEqualTo("test@example.com");
         assertThat(response.user().displayName()).isEqualTo("Alice");
         assertThat(response.user().roles()).containsExactly(Role.USER);
         verify(authenticationManager).authenticate(any(UsernamePasswordAuthenticationToken.class));
-        verify(jwtService).generateToken("test@example.com");
+        verify(jwtService).generateToken(1L);
     }
 
     @Test
     void returnsCurrentActiveUser() {
         User user = user("test@example.com", "encoded-password", "Alice", UserStatus.ACTIVE);
         when(userRepository.findByEmailIgnoreCase("test@example.com")).thenReturn(java.util.Optional.of(user));
-
         CurrentUserResponse response = authService.currentUser("test@example.com");
-
         assertThat(response.id()).isEqualTo(1L);
         assertThat(response.email()).isEqualTo("test@example.com");
         assertThat(response.displayName()).isEqualTo("Alice");
@@ -104,20 +88,16 @@ class AuthServiceTest {
     @Test
     void rejectsMissingCurrentUser() {
         when(userRepository.findByEmailIgnoreCase("missing@example.com")).thenReturn(java.util.Optional.empty());
-
         assertThatThrownBy(() -> authService.currentUser("missing@example.com"))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("User not found");
+                .isInstanceOf(IllegalArgumentException.class).hasMessage("User not found");
     }
 
     @Test
     void rejectsInactiveCurrentUser() {
         User user = user("test@example.com", "encoded-password", "Alice", UserStatus.BLOCKED);
         when(userRepository.findByEmailIgnoreCase("test@example.com")).thenReturn(java.util.Optional.of(user));
-
         assertThatThrownBy(() -> authService.currentUser("test@example.com"))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("User account is not active");
+                .isInstanceOf(IllegalArgumentException.class).hasMessage("User account is not active");
     }
 
     @Test
@@ -127,11 +107,8 @@ class AuthServiceTest {
         when(userRepository.findByEmailIgnoreCase("test@example.com")).thenReturn(java.util.Optional.of(user));
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
                 .thenThrow(mock(AuthenticationException.class));
-
         assertThatThrownBy(() -> authService.login(request))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Invalid email or password");
-
+                .isInstanceOf(IllegalArgumentException.class).hasMessage("Invalid email or password");
         verifyNoInteractions(jwtService);
     }
 
@@ -140,11 +117,8 @@ class AuthServiceTest {
         LoginRequest request = new LoginRequest("test@example.com", "password123");
         User user = user("test@example.com", "encoded-password", "Alice", UserStatus.BLOCKED);
         when(userRepository.findByEmailIgnoreCase("test@example.com")).thenReturn(java.util.Optional.of(user));
-
         assertThatThrownBy(() -> authService.login(request))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("User account is not active");
-
+                .isInstanceOf(IllegalArgumentException.class).hasMessage("User account is not active");
         verifyNoInteractions(authenticationManager, jwtService);
     }
 
@@ -152,41 +126,31 @@ class AuthServiceTest {
     void rejectsUnknownEmail() {
         LoginRequest request = new LoginRequest("unknown@example.com", "password123");
         when(userRepository.findByEmailIgnoreCase("unknown@example.com")).thenReturn(java.util.Optional.empty());
-
         assertThatThrownBy(() -> authService.login(request))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Invalid email or password");
-
+                .isInstanceOf(IllegalArgumentException.class).hasMessage("Invalid email or password");
         verifyNoInteractions(authenticationManager, jwtService);
     }
 
     @Test
     void rejectsBlankLoginEmail() {
         LoginRequest request = new LoginRequest("   ", "password123");
-
         assertThatThrownBy(() -> authService.login(request))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Email is required");
+                .isInstanceOf(IllegalArgumentException.class).hasMessage("Email is required");
     }
 
     @Test
     void rejectsBlankLoginPassword() {
         LoginRequest request = new LoginRequest("test@example.com", "   ");
-
         assertThatThrownBy(() -> authService.login(request))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Password is required");
+                .isInstanceOf(IllegalArgumentException.class).hasMessage("Password is required");
     }
 
     @Test
     void rejectsDuplicateEmail() {
         RegisterRequest request = new RegisterRequest("test@example.com", "password123", "Alice");
         when(userRepository.existsByEmailIgnoreCase("test@example.com")).thenReturn(true);
-
         assertThatThrownBy(() -> authService.register(request))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Email is already registered");
-
+                .isInstanceOf(IllegalArgumentException.class).hasMessage("Email is already registered");
         verify(userRepository, never()).save(any(User.class));
         verifyNoInteractions(passwordEncoder);
     }
@@ -194,32 +158,26 @@ class AuthServiceTest {
     @Test
     void rejectsNullRequest() {
         assertThatThrownBy(() -> authService.register(null))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Registration request is required");
+                .isInstanceOf(IllegalArgumentException.class).hasMessage("Registration request is required");
     }
 
     @Test
     void rejectsBlankEmail() {
         RegisterRequest request = new RegisterRequest("   ", "password123", "Alice");
-
         assertThatThrownBy(() -> authService.register(request))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Email is required");
+                .isInstanceOf(IllegalArgumentException.class).hasMessage("Email is required");
     }
 
     @Test
     void rejectsShortPassword() {
         RegisterRequest request = new RegisterRequest("test@example.com", "1234567", "Alice");
-
         assertThatThrownBy(() -> authService.register(request))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Password must contain at least 8 characters");
+                .isInstanceOf(IllegalArgumentException.class).hasMessage("Password must contain at least 8 characters");
     }
 
     @Test
     void rejectsBlankDisplayName() {
         RegisterRequest request = new RegisterRequest("test@example.com", "password123", "   ");
-
         assertThatThrownBy(() -> authService.register(request))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Display name is required and must be at most 100 characters");
@@ -227,12 +185,7 @@ class AuthServiceTest {
 
     @Test
     void rejectsTooLongDisplayName() {
-        RegisterRequest request = new RegisterRequest(
-                "test@example.com",
-                "password123",
-                "a".repeat(101)
-        );
-
+        RegisterRequest request = new RegisterRequest("test@example.com", "password123", "a".repeat(101));
         assertThatThrownBy(() -> authService.register(request))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Display name is required and must be at most 100 characters");

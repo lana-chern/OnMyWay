@@ -24,19 +24,31 @@ public class JwtService {
         this.expirationMs = validateExpiration(expirationMs);
     }
 
-    public String generateToken(String email) {
-        Instant now = Instant.now();
+    public String generateToken(Long userId) {
+        if (userId == null || userId <= 0) {
+            throw new IllegalArgumentException("User ID must be a positive number");
+        }
 
+        Instant now = Instant.now();
         return Jwts.builder()
-                .subject(email)
+                .subject(userId.toString())
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plusMillis(expirationMs)))
                 .signWith(signingKey)
                 .compact();
     }
 
-    public String extractEmail(String token) {
-        return parseClaims(token).getSubject();
+    public Long extractUserId(String token) {
+        String subject = parseClaims(token).getSubject();
+        try {
+            long userId = Long.parseLong(subject);
+            if (userId <= 0) {
+                throw new IllegalArgumentException("Invalid user ID in token");
+            }
+            return userId;
+        } catch (NumberFormatException exception) {
+            throw new IllegalArgumentException("Invalid user ID in token", exception);
+        }
     }
 
     public boolean isValid(String token) {

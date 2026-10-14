@@ -24,13 +24,10 @@ import static org.mockito.Mockito.*;
 class JwtAuthenticationFilterTest {
     @Mock
     JwtService jwtService;
-
     @Mock
     OnMyWayUserDetailsService userDetailsService;
-
     @Mock
     FilterChain filterChain;
-
     @InjectMocks
     JwtAuthenticationFilter filter;
 
@@ -43,9 +40,7 @@ class JwtAuthenticationFilterTest {
     void passesThroughWithoutAuthorizationHeader() throws ServletException, IOException {
         MockHttpServletRequest request = new MockHttpServletRequest();
         MockHttpServletResponse response = new MockHttpServletResponse();
-
         filter.doFilter(request, response, filterChain);
-
         assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
         verify(filterChain).doFilter(request, response);
         verifyNoInteractions(jwtService, userDetailsService);
@@ -56,9 +51,7 @@ class JwtAuthenticationFilterTest {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader("Authorization", "Basic credentials");
         MockHttpServletResponse response = new MockHttpServletResponse();
-
         filter.doFilter(request, response, filterChain);
-
         assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
         verify(filterChain).doFilter(request, response);
         verifyNoInteractions(jwtService, userDetailsService);
@@ -69,9 +62,7 @@ class JwtAuthenticationFilterTest {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader("Authorization", "Bearer ");
         MockHttpServletResponse response = new MockHttpServletResponse();
-
         filter.doFilter(request, response, filterChain);
-
         assertThat(response.getStatus()).isEqualTo(401);
         assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
         verifyNoInteractions(jwtService, userDetailsService, filterChain);
@@ -85,9 +76,7 @@ class JwtAuthenticationFilterTest {
         OnMyWayUserDetails userDetails = userDetails(true);
         when(jwtService.extractUserId("jwt-token")).thenReturn(1842L);
         when(userDetailsService.loadUserById(1842L)).thenReturn(userDetails);
-
         filter.doFilter(request, response, filterChain);
-
         assertThat(SecurityContextHolder.getContext().getAuthentication()).isNotNull();
         assertThat(SecurityContextHolder.getContext().getAuthentication().getPrincipal()).isSameAs(userDetails);
         verify(jwtService).extractUserId("jwt-token");
@@ -101,9 +90,7 @@ class JwtAuthenticationFilterTest {
         request.addHeader("Authorization", "Bearer invalid-token");
         MockHttpServletResponse response = new MockHttpServletResponse();
         when(jwtService.extractUserId("invalid-token")).thenThrow(new IllegalArgumentException("Invalid token"));
-
         filter.doFilter(request, response, filterChain);
-
         assertThat(response.getStatus()).isEqualTo(401);
         assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
         verifyNoInteractions(userDetailsService, filterChain);
@@ -116,9 +103,7 @@ class JwtAuthenticationFilterTest {
         MockHttpServletResponse response = new MockHttpServletResponse();
         when(jwtService.extractUserId("jwt-token")).thenReturn(1842L);
         when(userDetailsService.loadUserById(1842L)).thenThrow(new UsernameNotFoundException("User not found"));
-
         filter.doFilter(request, response, filterChain);
-
         assertThat(response.getStatus()).isEqualTo(401);
         assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
         verifyNoInteractions(filterChain);
@@ -131,9 +116,7 @@ class JwtAuthenticationFilterTest {
         MockHttpServletResponse response = new MockHttpServletResponse();
         when(jwtService.extractUserId("jwt-token")).thenReturn(1842L);
         when(userDetailsService.loadUserById(1842L)).thenReturn(userDetails(false));
-
         filter.doFilter(request, response, filterChain);
-
         assertThat(response.getStatus()).isEqualTo(401);
         assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
         verify(userDetailsService).loadUserById(1842L);
@@ -141,12 +124,7 @@ class JwtAuthenticationFilterTest {
     }
 
     private OnMyWayUserDetails userDetails(boolean enabled) {
-        return new OnMyWayUserDetails(
-                1842L,
-                "updated-email@example.com",
-                "encoded-password",
-                List.of(new SimpleGrantedAuthority("ROLE_USER")),
-                enabled
-        );
+        return new OnMyWayUserDetails(1842L, "updated-email@example.com", "encoded-password",
+                List.of(new SimpleGrantedAuthority("ROLE_USER")), enabled);
     }
 }

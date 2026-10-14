@@ -37,7 +37,6 @@ public class AuthService {
     public CurrentUserResponse register(RegisterRequest request) {
         validateRegisterRequest(request);
         String email = request.email().trim().toLowerCase(Locale.ROOT);
-
         if (userRepository.existsByEmailIgnoreCase(email)) {
             throw new IllegalArgumentException("Email is already registered");
         }
@@ -47,7 +46,6 @@ public class AuthService {
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         user.setDisplayName(request.displayName().trim());
         user.getRoles().add(Role.USER);
-
         user = userRepository.save(user);
         return toResponse(user);
     }
@@ -55,7 +53,6 @@ public class AuthService {
     public LoginResponse login(LoginRequest request) {
         validateLoginRequest(request);
         String email = request.email().trim().toLowerCase(Locale.ROOT);
-
         User user = userRepository.findByEmailIgnoreCase(email)
                 .orElseThrow(() -> new IllegalArgumentException("Invalid email or password"));
 
@@ -71,17 +68,15 @@ public class AuthService {
             throw new IllegalArgumentException("Invalid email or password");
         }
 
-        return new LoginResponse(jwtService.generateToken(email), toResponse(user));
+        return new LoginResponse(jwtService.generateToken(user.getId()), toResponse(user));
     }
 
     public CurrentUserResponse currentUser(String email) {
         User user = userRepository.findByEmailIgnoreCase(email)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
-
         if (user.getStatus() != UserStatus.ACTIVE) {
             throw new IllegalArgumentException("User account is not active");
         }
-
         return toResponse(user);
     }
 
@@ -113,11 +108,6 @@ public class AuthService {
     }
 
     private CurrentUserResponse toResponse(User user) {
-        return new CurrentUserResponse(
-                user.getId(),
-                user.getEmail(),
-                user.getDisplayName(),
-                Set.copyOf(user.getRoles())
-        );
+        return new CurrentUserResponse(user.getId(), user.getEmail(), user.getDisplayName(), Set.copyOf(user.getRoles()));
     }
 }
