@@ -155,6 +155,36 @@ class PlaceControllerTest {
     }
 
     @Test
+    void rejectsUpdateToArchivedPlace() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("organizer-archived-update@example.com", Role.ORGANIZER));
+        City city = cityRepository.saveAndFlush(city("Amsterdam Archived Update"));
+        Place place = placeRepository.saveAndFlush(place(city, owner, "Archived place", PlaceStatus.ARCHIVED));
+
+        mockMvc.perform(put("/api/places/{id}", place.getId())
+                        .with(user(principal(owner)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\\"name\\":\\"Attempted update\\",\\"latitude\\":52.370000,\\"longitude\\":4.900000}"))
+                .andExpect(status().isNotFound());
+
+        Place unchangedPlace = placeRepository.findById(place.getId()).orElseThrow();
+        assertThat(unchangedPlace.getStatus()).isEqualTo(PlaceStatus.ARCHIVED);
+        assertThat(unchangedPlace.getName()).isEqualTo("Archived place");
+    }
+
+    @Test
+    void rejectsPlaceDeletionForRegularUser() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("organizer-user-role-delete@example.com", Role.ORGANIZER));
+        City city = cityRepository.saveAndFlush(city("Amsterdam User Role Delete"));
+        Place place = placeRepository.saveAndFlush(place(city, owner, "Protected published place", PlaceStatus.PUBLISHED));
+
+        mockMvc.perform(delete("/api/places/{id}", place.getId())
+                        .with(user("regular-user@example.com").roles("USER")))
+                .andExpect(status().isForbidden());
+
+        assertThat(placeRepository.findById(place.getId()).orElseThrow().getStatus()).isEqualTo(PlaceStatus.PUBLISHED);
+    }
+
+    @Test
     void rejectsPlaceDeletionForAnotherOrganizer() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("organizer-delete-owner@example.com", Role.ORGANIZER));
         User anotherOrganizer = userRepository.saveAndFlush(testUser("organizer-delete-another@example.com", Role.ORGANIZER));
