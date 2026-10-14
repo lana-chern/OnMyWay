@@ -8,11 +8,13 @@ import com.onmyway.data.entities.*;
 import com.onmyway.data.repositories.CityRepository;
 import com.onmyway.data.repositories.PlaceRepository;
 import com.onmyway.data.repositories.UserRepository;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Objects;
 
 @Service
 @Transactional
@@ -59,16 +61,28 @@ public class PlaceService {
         return PlaceResponse.from(placeRepository.save(place));
     }
 
-    public PlaceResponse update(Long id, UpdatePlaceRequest request, Long ownerId) {
+    public PlaceResponse update(Long id, UpdatePlaceRequest request, Long actorId, boolean admin) {
         validateRequest(id, request.name(), request.latitude(), request.longitude(), request.photos(), request.contacts(), request.openingHours());
         Place place = placeRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Place %d not found".formatted(id)));
-
-        if (place.getOwner() == null || !java.util.Objects.equals(place.getOwner().getId(), ownerId)) {
-            throw new org.springframework.security.access.AccessDeniedException("You can update only your own places");
+        assertCanManage(place, actorId, admin);
+        if (place.getStatus() == PlaceStatus.ARCHIVED) {
+            throw new ResourceNotFoundException("Place %d not found".formatted(id));
         }
 
         apply(place, request.name(), request.description(), request.latitude(), request.longitude(), request.photos(), request.contacts(), request.openingHours());
         return PlaceResponse.from(place);
+    }
+
+    public void delete(Long id, Long actorId, boolean admin) {
+        Place place = placeRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Place %d not found".formatted(id)));
+        assertCanManage(place, actorId, admin);
+        place.setStatus(PlaceStatus.ARCHIVED);
+    }
+
+    private void assertCanManage(Place place, Long actorId, boolean admin) {
+        if (!admin && (place.getOwner() == null || !Objects.equals(place.getOwner().getId(), actorId))) {
+            throw new AccessDeniedException("You can manage only your own places");
+        }
     }
 
     private void apply(Place place, String name, String description, BigDecimal latitude, BigDecimal longitude,
