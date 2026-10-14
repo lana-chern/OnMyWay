@@ -163,7 +163,7 @@ class PlaceControllerTest {
         mockMvc.perform(put("/api/places/{id}", place.getId())
                         .with(user(principal(owner)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\\"name\\":\\"Attempted update\\",\\"latitude\\":52.370000,\\"longitude\\":4.900000}"))
+                        .content("{\"name\":\"Attempted update\",\"latitude\":52.370000,\"longitude\":4.900000}"))
                 .andExpect(status().isNotFound());
 
         Place unchangedPlace = placeRepository.findById(place.getId()).orElseThrow();
