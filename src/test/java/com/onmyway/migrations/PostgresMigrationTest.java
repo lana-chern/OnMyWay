@@ -20,14 +20,14 @@ class PostgresMigrationTest {
     private static final String LEGACY_EMAIL = "legacy-places@onmyway.invalid";
 
     @Test
-    void migratesFreshDatabase() throws SQLException {
+    void migratesFreshDatabase() throws SQLException, IOException {
         withIsolatedSchema("fresh", schema -> {
             Flyway flyway = flyway(schema);
             var result = flyway.migrate();
 
             assertEquals(2, result.migrationsExecuted);
             assertColumnExists(schema, "places", "owner_id");
-            assertNotNull(queryLong(schema,
+            assertEquals(2L, queryLong(schema,
                     "SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE AND version IN ('1', '2')"));
             assertEquals(0L, queryLong(schema, "SELECT COUNT(*) FROM users WHERE email = '" + LEGACY_EMAIL + "'"));
             assertTrue(hasConstraint(schema, "places", "fk_places_owner"));
@@ -89,9 +89,11 @@ class PostgresMigrationTest {
     }
 
     private void createLegacySchema(String schema) throws SQLException, IOException {
-        String baseline = new String(
-                getClass().getClassLoader().getResourceAsStream("db/migration/V1__baseline_schema.sql").readAllBytes(),
-                StandardCharsets.UTF_8);
+        String baseline;
+        try (var input = getClass().getClassLoader().getResourceAsStream("db/migration/V1__baseline_schema.sql")) {
+            assertNotNull(input, "V1 baseline migration must be available on the test classpath");
+            baseline = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+        }
         try (Connection connection = connection(); Statement statement = connection.createStatement()) {
             statement.execute("SET search_path TO \"" + schema + "\"");
             for (String sql : baseline.split(";")) {
@@ -103,7 +105,7 @@ class PostgresMigrationTest {
         }
     }
 
-    private void withIsolatedSchema(String prefix, SqlRunnable runnable) throws SQLException {
+    private void withIsolatedSchema(String prefix, SqlRunnable runnable) throws SQLException, IOException {
         String schema = "migration_" + prefix + "_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         try (Connection connection = connection(); Statement statement = connection.createStatement()) {
             statement.execute("CREATE SCHEMA \"" + schema + "\"");
