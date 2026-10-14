@@ -118,6 +118,81 @@ class PlaceControllerTest {
                 .andExpect(status().isForbidden());
     }
 
+    @Test
+    void allowsAdminToUpdateAnotherOrganizersPlace() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("organizer-admin-owner@example.com", Role.ORGANIZER));
+        User admin = userRepository.saveAndFlush(testUser("admin-update@example.com", Role.ADMIN));
+        City city = cityRepository.saveAndFlush(city("Amsterdam Admin Update"));
+        Place place = placeRepository.saveAndFlush(place(city, owner, "Original", PlaceStatus.DRAFT));
+
+        mockMvc.perform(put("/api/places/{id}", place.getId())
+                        .with(user(principal(admin)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Admin update\",\"latitude\":52.370000,\"longitude\":4.900000}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Admin update"));
+    }
+
+    @Test
+    void deletesPlaceByArchivingItAndHidesItFromPublicReads() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("organizer-delete@example.com", Role.ORGANIZER));
+        City city = cityRepository.saveAndFlush(city("Amsterdam Delete"));
+        Place place = placeRepository.saveAndFlush(place(city, owner, "Published place", PlaceStatus.PUBLISHED));
+
+        mockMvc.perform(delete("/api/places/{id}", place.getId())
+                        .with(user(principal(owner))))
+                .andExpect(status().isNoContent());
+
+        Place archivedPlace = placeRepository.findById(place.getId()).orElseThrow();
+        assertThat(archivedPlace.getStatus()).isEqualTo(PlaceStatus.ARCHIVED);
+
+        mockMvc.perform(get("/api/places").param("cityId", city.getId().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(0)));
+
+        mockMvc.perform(get("/api/places/{id}", place.getId()))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void rejectsPlaceDeletionForAnotherOrganizer() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("organizer-delete-owner@example.com", Role.ORGANIZER));
+        User anotherOrganizer = userRepository.saveAndFlush(testUser("organizer-delete-another@example.com", Role.ORGANIZER));
+        City city = cityRepository.saveAndFlush(city("Amsterdam Forbidden Delete"));
+        Place place = placeRepository.saveAndFlush(place(city, owner, "Still published", PlaceStatus.PUBLISHED));
+
+        mockMvc.perform(delete("/api/places/{id}", place.getId())
+                        .with(user(principal(anotherOrganizer))))
+                .andExpect(status().isForbidden());
+
+        assertThat(placeRepository.findById(place.getId()).orElseThrow().getStatus()).isEqualTo(PlaceStatus.PUBLISHED);
+    }
+
+    @Test
+    void allowsAdminToDeleteAnotherOrganizersPlace() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("organizer-admin-delete-owner@example.com", Role.ORGANIZER));
+        User admin = userRepository.saveAndFlush(testUser("admin-delete@example.com", Role.ADMIN));
+        City city = cityRepository.saveAndFlush(city("Amsterdam Admin Delete"));
+        Place place = placeRepository.saveAndFlush(place(city, owner, "Admin archived place", PlaceStatus.PUBLISHED));
+
+        mockMvc.perform(delete("/api/places/{id}", place.getId())
+                        .with(user(principal(admin))))
+                .andExpect(status().isNoContent());
+
+        assertThat(placeRepository.findById(place.getId()).orElseThrow().getStatus()).isEqualTo(PlaceStatus.ARCHIVED);
+    }
+
+    @Test
+    void rejectsUnauthenticatedPlaceDeletion() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("organizer-unauth-delete@example.com", Role.ORGANIZER));
+        City city = cityRepository.saveAndFlush(city("Amsterdam Unauthenticated Delete"));
+        Place place = placeRepository.saveAndFlush(place(city, owner, "Protected place", PlaceStatus.PUBLISHED));
+
+        mockMvc.perform(delete("/api/places/{id}", place.getId()))
+                .andExpect(status().isUnauthorized());
+
+        assertThat(placeRepository.findById(place.getId()).orElseThrow().getStatus()).isEqualTo(PlaceStatus.PUBLISHED);
+    }
 
     @Test
     void authorizesPlaceUpdateByOwnerIdRatherThanEmail() throws Exception {
