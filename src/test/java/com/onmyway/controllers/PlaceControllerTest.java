@@ -1,5 +1,6 @@
 package com.onmyway.controllers;
 
+import com.onmyway.auth.OnMyWayUserDetails;
 import com.onmyway.data.entities.City;
 import com.onmyway.data.entities.Place;
 import com.onmyway.data.entities.PlaceStatus;
@@ -15,6 +16,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
 import java.math.BigDecimal;
 
@@ -44,7 +46,7 @@ class PlaceControllerTest {
                 cityRepository.saveAndFlush(city).getId());
 
         var result = mockMvc.perform(post("/api/places")
-                        .with(user(owner.getEmail()).roles("ORGANIZER"))
+                        .with(user(principal(owner)))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isCreated())
@@ -68,7 +70,7 @@ class PlaceControllerTest {
                 city.getId());
 
         mockMvc.perform(post("/api/places")
-                        .with(user(owner.getEmail()).roles("ORGANIZER"))
+                        .with(user(principal(owner)))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isBadRequest())
@@ -91,7 +93,7 @@ class PlaceControllerTest {
         Place place = placeRepository.saveAndFlush(place(city, owner, "Old name", PlaceStatus.DRAFT));
 
         mockMvc.perform(put("/api/places/{id}", place.getId())
-                        .with(user(owner.getEmail()).roles("ORGANIZER"))
+                        .with(user(principal(owner)))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"New name\",\"description\":\"Updated description\",\"latitude\":52.370000,\"longitude\":4.900000}"))
                 .andExpect(status().isOk())
@@ -109,7 +111,7 @@ class PlaceControllerTest {
         Place place = placeRepository.saveAndFlush(place(city, owner, "Existing", PlaceStatus.DRAFT));
 
         mockMvc.perform(put("/api/places/{id}", place.getId())
-                        .with(user(anotherOrganizer.getEmail()).roles("ORGANIZER"))
+                        .with(user(principal(anotherOrganizer)))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"New name\",\"latitude\":52.370000,\"longitude\":4.900000}"))
                 .andExpect(status().isForbidden());
@@ -126,6 +128,19 @@ class PlaceControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(1)))
                 .andExpect(jsonPath("$[0].name").value("Published"));
+    }
+
+
+    private OnMyWayUserDetails principal(User user) {
+        return new OnMyWayUserDetails(
+                user.getId(),
+                user.getEmail(),
+                user.getPasswordHash(),
+                user.getRoles().stream()
+                        .map(role -> new SimpleGrantedAuthority("ROLE_" + role.name()))
+                        .toList(),
+                true
+        );
     }
 
     private User testUser(String email, Role role) {

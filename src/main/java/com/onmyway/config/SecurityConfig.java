@@ -1,6 +1,7 @@
 package com.onmyway.config;
 
 import com.onmyway.auth.JwtAuthenticationFilter;
+import com.onmyway.auth.OnMyWayUserDetails;
 import com.onmyway.data.entities.User;
 import com.onmyway.data.entities.UserStatus;
 import com.onmyway.data.repositories.UserRepository;
@@ -13,6 +14,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -54,12 +56,15 @@ public class SecurityConfig {
             User user = userRepository.findByEmailIgnoreCase(email)
                     .orElseThrow(() -> new UsernameNotFoundException("User not found"));
 
-            return org.springframework.security.core.userdetails.User
-                    .withUsername(user.getEmail())
-                    .password(user.getPasswordHash())
-                    .roles(user.getRoles().stream().map(Enum::name).toArray(String[]::new))
-                    .disabled(user.getStatus() != UserStatus.ACTIVE)
-                    .build();
+            return new OnMyWayUserDetails(
+                    user.getId(),
+                    user.getEmail(),
+                    user.getPasswordHash(),
+                    user.getRoles().stream()
+                            .map(role -> new SimpleGrantedAuthority("ROLE_" + role.name()))
+                            .toList(),
+                    user.getStatus() == UserStatus.ACTIVE
+            );
         };
     }
 

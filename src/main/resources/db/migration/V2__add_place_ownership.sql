@@ -3,10 +3,18 @@
 
 ALTER TABLE places ADD COLUMN owner_id BIGINT;
 
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM places WHERE owner_id IS NULL)
+       AND EXISTS (SELECT 1 FROM users WHERE email = 'legacy-places@onmyway.invalid') THEN
+        RAISE EXCEPTION 'Cannot assign legacy places: reserved placeholder email legacy-places@onmyway.invalid is already in use';
+    END IF;
+END
+$$;
+
 INSERT INTO users (email, password_hash, display_name, status, created_at, updated_at)
 SELECT 'legacy-places@onmyway.invalid', '!', 'Legacy places (migration)', 'BLOCKED', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-WHERE EXISTS (SELECT 1 FROM places WHERE owner_id IS NULL)
-ON CONFLICT (email) DO NOTHING;
+WHERE EXISTS (SELECT 1 FROM places WHERE owner_id IS NULL);
 
 UPDATE places
 SET owner_id = (

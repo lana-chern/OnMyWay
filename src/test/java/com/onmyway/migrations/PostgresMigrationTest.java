@@ -1,6 +1,7 @@
 package com.onmyway.migrations;
 
 import org.flywaydb.core.Flyway;
+import org.flywaydb.core.api.FlywayException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
@@ -72,6 +73,42 @@ class PostgresMigrationTest {
                     "SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE AND version = '1' AND type = 'BASELINE'"));
             assertEquals(1L, queryLong(schema,
                     "SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE AND version = '2'"));
+        });
+    }
+
+
+    @Test
+    void failsWhenReservedPlaceholderEmailIsAlreadyInUse() throws SQLException, IOException {
+        withIsolatedSchema("collision", schema -> {
+            createLegacySchema(schema);
+            try (Connection connection = connection(); Statement statement = connection.createStatement()) {
+                statement.execute("SET search_path TO \"" + schema + "\"");
+                statement.execute("""
+                        INSERT INTO users (email, password_hash, display_name, status, created_at, updated_at)
+                        VALUES ('legacy-places@onmyway.invalid', 'existing-password-hash',
+                                'Existing account', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                        """);
+                statement.execute("""
+                        INSERT INTO cities (name, country_code, latitude, longitude, timezone)
+                        VALUES ('Collision city', 'NL', 52.370000, 4.895000, 'Europe/Amsterdam')
+                        """);
+                statement.execute("""
+                        INSERT INTO places (city_id, name, description, latitude, longitude, status, created_at, updated_at)
+                        SELECT id, 'Collision place', 'Must not be reassigned', 52.370000, 4.895000, 'PUBLISHED',
+                               CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                        FROM cities WHERE name = 'Collision city'
+                        """);
+            }
+
+            assertThrows(FlywayException.class, () -> flyway(schema).migrate());
+            assertEquals(0L, queryLong(schema, """
+                    SELECT COUNT(*) FROM information_schema.columns
+                    WHERE table_schema = '%s' AND table_name = 'places' AND column_name = 'owner_id'
+                    """.formatted(schema)), "Failed migration must roll back the ownership column");
+            assertEquals(1L, queryLong(schema, """
+                    SELECT COUNT(*) FROM users
+                    WHERE email = 'legacy-places@onmyway.invalid' AND status = 'ACTIVE'
+                    """));
         });
     }
 

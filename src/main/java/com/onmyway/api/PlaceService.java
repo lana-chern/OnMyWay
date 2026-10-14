@@ -45,11 +45,11 @@ public class PlaceService {
                 .orElseThrow(() -> new ResourceNotFoundException("Place %d not found".formatted(id)));
     }
 
-    public PlaceResponse create(CreatePlaceRequest request, String ownerEmail) {
+    public PlaceResponse create(CreatePlaceRequest request, Long ownerId) {
         validateRequest(request.cityId(), request.name(), request.latitude(), request.longitude(), request.photos(), request.contacts(), request.openingHours());
         City city = cityRepository.findById(request.cityId())
                 .orElseThrow(() -> new ResourceNotFoundException("City %d not found".formatted(request.cityId())));
-        User owner = userRepository.findByEmailIgnoreCase(ownerEmail)
+        User owner = userRepository.findById(ownerId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         Place place = new Place();
@@ -59,11 +59,11 @@ public class PlaceService {
         return PlaceResponse.from(placeRepository.save(place));
     }
 
-    public PlaceResponse update(Long id, UpdatePlaceRequest request, String ownerEmail) {
+    public PlaceResponse update(Long id, UpdatePlaceRequest request, Long ownerId) {
         validateRequest(id, request.name(), request.latitude(), request.longitude(), request.photos(), request.contacts(), request.openingHours());
         Place place = placeRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Place %d not found".formatted(id)));
 
-        if (place.getOwner() == null || !place.getOwner().getEmail().equalsIgnoreCase(ownerEmail)) {
+        if (place.getOwner() == null || !java.util.Objects.equals(place.getOwner().getId(), ownerId)) {
             throw new org.springframework.security.access.AccessDeniedException("You can update only your own places");
         }
 
