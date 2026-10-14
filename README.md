@@ -12,6 +12,8 @@ The application is designed to provide:
 - public access to published places;
 - creation and management of places by organizers;
 - ownership-based access control for place management;
+- soft deletion of places through the `ARCHIVED` status;
+- administrator access to manage places across owners;
 - user registration and authentication;
 - JWT-based authorization and role-based access control;
 - validation and consistent API error handling.
@@ -20,9 +22,7 @@ The application is designed to provide:
 
 Planned improvements include:
 
-- database migration management;
-- more complete moderator and administrator permissions;
-- place deletion and additional ownership rules;
+- more complete moderator permissions and moderation workflow;
 - improved authentication and authorization flows;
 - API documentation with OpenAPI/Swagger;
 - pagination, filtering, and sorting for place searches;
@@ -47,6 +47,8 @@ OnMyWay — backend-приложение для поиска и управлен
 - публичного доступа к опубликованным местам;
 - создания и управления местами организаторами;
 - разграничения доступа к управлению местами на основе владения;
+- мягкого удаления мест через статус `ARCHIVED`;
+- управления местами разных владельцев администраторами;
 - регистрации и аутентификации пользователей;
 - авторизации на основе JWT и ролей;
 - валидации входных данных и единообразной обработки ошибок API.
@@ -55,9 +57,7 @@ OnMyWay — backend-приложение для поиска и управлен
 
 В планах:
 
-- управление миграциями базы данных;
-- более полная реализация прав модераторов и администраторов;
-- удаление мест и дополнительные правила владения;
+- более полная реализация прав модераторов и процесса модерации;
 - улучшение процессов аутентификации и авторизации;
 - документирование API с помощью OpenAPI/Swagger;
 - пагинация, фильтрация и сортировка поиска мест;
