@@ -91,7 +91,7 @@ class AuthControllerTest {
     @Test
     void returnsCurrentUserWithValidJwt() throws Exception {
         registerUser("test@example.com", "password123", "Alice");
-        String token = jwtService.generateToken("test@example.com");
+        String token = jwtService.generateToken(userRepository.findByEmailIgnoreCase("test@example.com").orElseThrow().getId());
 
         mockMvc.perform(get("/api/auth/me")
                         .header("Authorization", "Bearer " + token))
@@ -122,7 +122,7 @@ class AuthControllerTest {
         User user = registerUser("test@example.com", "password123", "Alice");
         user.setStatus(UserStatus.BLOCKED);
         userRepository.saveAndFlush(user);
-        String token = jwtService.generateToken("test@example.com");
+        String token = jwtService.generateToken(user.getId());
 
         mockMvc.perform(get("/api/auth/me")
                         .header("Authorization", "Bearer " + token))
