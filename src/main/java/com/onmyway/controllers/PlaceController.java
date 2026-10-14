@@ -33,6 +33,16 @@ public class PlaceController {
 
     @PutMapping("/{id}")
     public PlaceResponse update(@PathVariable Long id, @RequestBody UpdatePlaceRequest request, @AuthenticationPrincipal OnMyWayUserDetails principal) {
-        return placeService.update(id, request, principal.getId());
+        return placeService.update(id, request, principal.getId(), isAdmin(principal));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(@PathVariable Long id, @AuthenticationPrincipal OnMyWayUserDetails principal) {
+        placeService.delete(id, principal.getId(), isAdmin(principal));
+        return ResponseEntity.noContent().build();
+    }
+
+    private boolean isAdmin(OnMyWayUserDetails principal) {
+        return principal.getAuthorities().stream().anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()));
     }
 }
