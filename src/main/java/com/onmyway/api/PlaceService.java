@@ -117,7 +117,7 @@ public class PlaceService {
         if (reason == null || reason.isBlank()) {
             throw new IllegalArgumentException("A rejection reason is required");
         }
-        String normalizedReason = reason.trim();
+        String normalizedReason = reason.strip();
         if (normalizedReason.length() > MAX_REJECTION_REASON_LENGTH) {
             throw new IllegalArgumentException("Rejection reason must be at most %d characters".formatted(MAX_REJECTION_REASON_LENGTH));
         }
