@@ -19,7 +19,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
 import java.math.BigDecimal;
-import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
@@ -78,6 +77,18 @@ class ModerationControllerTest {
     }
 
     @Test
+    void administratorCanAccessModerationQueue() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("moderation-admin-queue-owner@example.com", Role.ORGANIZER));
+        User admin = userRepository.saveAndFlush(testUser("moderation-admin-queue@example.com", Role.ADMIN));
+        Place pending = placeRepository.saveAndFlush(place(owner, "Admin queue pending", PlaceStatus.PENDING_MODERATION));
+
+        mockMvc.perform(get("/api/moderation/places/pending").with(user(principal(admin))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(1)))
+                .andExpect(jsonPath("$[0].id").value(pending.getId()));
+    }
+
+    @Test
     void moderatorCanPublishPendingPlace() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("moderation-publish-owner@example.com", Role.ORGANIZER));
         User moderator = userRepository.saveAndFlush(testUser("moderation-publish-mod@example.com", Role.MODERATOR));
@@ -85,6 +96,20 @@ class ModerationControllerTest {
 
         mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
                         .with(user(principal(moderator))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PUBLISHED"));
+
+        assertThat(placeRepository.findById(place.getId()).orElseThrow().getStatus()).isEqualTo(PlaceStatus.PUBLISHED);
+    }
+
+    @Test
+    void administratorCanPublishPendingPlace() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("moderation-admin-publish-owner@example.com", Role.ORGANIZER));
+        User admin = userRepository.saveAndFlush(testUser("moderation-admin-publish@example.com", Role.ADMIN));
+        Place place = placeRepository.saveAndFlush(place(owner, "Admin pending place", PlaceStatus.PENDING_MODERATION));
+
+        mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
+                        .with(user(principal(admin))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("PUBLISHED"));
 
@@ -125,7 +150,7 @@ class ModerationControllerTest {
         mockMvc.perform(put("/api/places/{id}", place.getId())
                         .with(user(principal(moderator)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\":\"Edited by moderator\",\"latitude\":52.370000,\"longitude\":4.900000}"))
+                        .content("{\\"name\\":\\"Edited by moderator\\",\\"latitude\\":52.370000,\\"longitude\\":4.900000}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("Edited by moderator"));
 
@@ -146,6 +171,19 @@ class ModerationControllerTest {
                 .andExpect(status().isConflict());
 
         assertThat(placeRepository.findById(place.getId()).orElseThrow().getStatus()).isEqualTo(PlaceStatus.DRAFT);
+    }
+
+    @Test
+    void cannotPublishAlreadyPublishedPlaceAgain() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("moderation-republish-owner@example.com", Role.ORGANIZER));
+        User moderator = userRepository.saveAndFlush(testUser("moderation-republish-mod@example.com", Role.MODERATOR));
+        Place place = placeRepository.saveAndFlush(place(owner, "Already published", PlaceStatus.PUBLISHED));
+
+        mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
+                        .with(user(principal(moderator))))
+                .andExpect(status().isConflict());
+
+        assertThat(placeRepository.findById(place.getId()).orElseThrow().getStatus()).isEqualTo(PlaceStatus.PUBLISHED);
     }
 
     private OnMyWayUserDetails principal(User user) {
