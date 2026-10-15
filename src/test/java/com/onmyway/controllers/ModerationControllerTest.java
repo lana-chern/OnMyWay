@@ -150,7 +150,7 @@ class ModerationControllerTest {
         mockMvc.perform(put("/api/places/{id}", place.getId())
                         .with(user(principal(moderator)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\\"name\\":\\"Edited by moderator\\",\\"latitude\\":52.370000,\\"longitude\\":4.900000}"))
+                        .content("{\"name\":\"Edited by moderator\",\"latitude\":52.370000,\"longitude\":4.900000}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("Edited by moderator"));
 
