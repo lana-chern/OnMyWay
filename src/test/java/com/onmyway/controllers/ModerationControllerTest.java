@@ -125,7 +125,7 @@ class ModerationControllerTest {
         mockMvc.perform(post("/api/moderation/places/{id}/reject", place.getId())
                         .with(user(principal(moderator)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\\"reason\\":\\"Missing opening hours\\"}"))
+                        .content("{\"reason\":\"   \"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("REJECTED"))
                 .andExpect(jsonPath("$.rejectionReason").value("Missing opening hours"));
@@ -153,7 +153,7 @@ class ModerationControllerTest {
         mockMvc.perform(post("/api/moderation/places/{id}/reject", place.getId())
                         .with(user(principal(moderator)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\\"reason\\":\\"   \\"}"))
+                        .content("{\"reason\":\"   \"}"))
                 .andExpect(status().isBadRequest());
 
         assertThat(placeRepository.findById(place.getId()).orElseThrow().getStatus())
