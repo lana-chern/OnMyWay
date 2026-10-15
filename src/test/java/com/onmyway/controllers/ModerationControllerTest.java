@@ -164,6 +164,67 @@ class ModerationControllerTest {
     }
 
     @Test
+    void missingOrNullRejectionReasonIsRejected() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("moderation-missing-reason-owner@example.com", Role.ORGANIZER));
+        User moderator = userRepository.saveAndFlush(testUser("moderation-missing-reason-mod@example.com", Role.MODERATOR));
+        Place place = placeRepository.saveAndFlush(place(owner, "Pending place", PlaceStatus.PENDING_MODERATION));
+
+        mockMvc.perform(post("/api/moderation/places/{id}/reject", place.getId())
+                        .with(user(principal(moderator)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(post("/api/moderation/places/{id}/reject", place.getId())
+                        .with(user(principal(moderator)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\\"reason\\":null}"))
+                .andExpect(status().isBadRequest());
+
+        assertThat(placeRepository.findById(place.getId()).orElseThrow().getStatus())
+                .isEqualTo(PlaceStatus.PENDING_MODERATION);
+        assertThat(placeRepository.findById(place.getId()).orElseThrow().getRejectionReason()).isNull();
+    }
+
+    @Test
+    void rejectionReasonMustNotExceedOneThousandCharactersAfterTrimming() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("moderation-long-reason-owner@example.com", Role.ORGANIZER));
+        User moderator = userRepository.saveAndFlush(testUser("moderation-long-reason-mod@example.com", Role.MODERATOR));
+        Place place = placeRepository.saveAndFlush(place(owner, "Pending place", PlaceStatus.PENDING_MODERATION));
+        String tooLongReason = "x".repeat(1001);
+
+        mockMvc.perform(post("/api/moderation/places/{id}/reject", place.getId())
+                        .with(user(principal(moderator)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\\"reason\\":\\"" + tooLongReason + "\\"}"))
+                .andExpect(status().isBadRequest());
+
+        assertThat(placeRepository.findById(place.getId()).orElseThrow().getStatus())
+                .isEqualTo(PlaceStatus.PENDING_MODERATION);
+        assertThat(placeRepository.findById(place.getId()).orElseThrow().getRejectionReason()).isNull();
+    }
+
+    @Test
+    void trimmedRejectionReasonOfExactlyOneThousandCharactersIsAccepted() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("moderation-boundary-reason-owner@example.com", Role.ORGANIZER));
+        User moderator = userRepository.saveAndFlush(testUser("moderation-boundary-reason-mod@example.com", Role.MODERATOR));
+        Place place = placeRepository.saveAndFlush(place(owner, "Pending place", PlaceStatus.PENDING_MODERATION));
+        String maxLengthReason = "x".repeat(1000);
+        String reasonWithSurroundingWhitespace = "  " + maxLengthReason + "  ";
+
+        mockMvc.perform(post("/api/moderation/places/{id}/reject", place.getId())
+                        .with(user(principal(moderator)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\\"reason\\":\\"" + reasonWithSurroundingWhitespace + "\\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("REJECTED"))
+                .andExpect(jsonPath("$.rejectionReason").value(maxLengthReason));
+
+        assertThat(placeRepository.findById(place.getId()).orElseThrow().getRejectionReason())
+                .isEqualTo(maxLengthReason);
+    }
+
+    @Test
     void anotherOrganizerCannotReadRejectedPlaceManagementDetails() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("moderation-manage-owner@example.com", Role.ORGANIZER));
         User anotherOrganizer = userRepository.saveAndFlush(testUser("moderation-manage-other@example.com", Role.ORGANIZER));
