@@ -19,6 +19,8 @@ import java.util.Objects;
 @Service
 @Transactional
 public class PlaceService {
+    private static final int MAX_REJECTION_REASON_LENGTH = 1000;
+
     private final PlaceRepository placeRepository;
     private final CityRepository cityRepository;
     private final UserRepository userRepository;
@@ -45,6 +47,15 @@ public class PlaceService {
         return placeRepository.findById(id).filter(place -> place.getStatus() == PlaceStatus.PUBLISHED)
                 .map(PlaceResponse::from)
                 .orElseThrow(() -> new ResourceNotFoundException("Place %d not found".formatted(id)));
+    }
+
+    @Transactional(readOnly = true)
+    public PlaceResponse findForManagement(Long id, Long actorId, boolean canManageAnyPlace) {
+        Place place = placeRepository.findById(id)
+                .filter(candidate -> candidate.getStatus() != PlaceStatus.ARCHIVED)
+                .orElseThrow(() -> new ResourceNotFoundException("Place %d not found".formatted(id)));
+        assertCanManage(place, actorId, canManageAnyPlace);
+        return PlaceResponse.from(place);
     }
 
     public PlaceResponse create(CreatePlaceRequest request, Long ownerId) {
@@ -86,6 +97,7 @@ public class PlaceService {
         if (place.getStatus() != PlaceStatus.DRAFT && place.getStatus() != PlaceStatus.REJECTED) {
             throw new IllegalStateException("Only draft or rejected places can be submitted for moderation");
         }
+        place.setRejectionReason(null);
         place.setStatus(PlaceStatus.PENDING_MODERATION);
         return PlaceResponse.from(place);
     }
@@ -98,20 +110,27 @@ public class PlaceService {
     }
 
     public PlaceResponse publish(Long id, boolean moderatorOrAdmin) {
-        return moderatePendingPlace(id, moderatorOrAdmin, PlaceStatus.PUBLISHED);
+        return moderatePendingPlace(id, moderatorOrAdmin, PlaceStatus.PUBLISHED, null);
     }
 
-    public PlaceResponse reject(Long id, boolean moderatorOrAdmin) {
-        return moderatePendingPlace(id, moderatorOrAdmin, PlaceStatus.REJECTED);
+    public PlaceResponse reject(Long id, boolean moderatorOrAdmin, String reason) {
+        if (reason == null || reason.isBlank()) {
+            throw new IllegalArgumentException("A rejection reason is required");
+        }
+        if (reason.length() > MAX_REJECTION_REASON_LENGTH) {
+            throw new IllegalArgumentException("Rejection reason must be at most %d characters".formatted(MAX_REJECTION_REASON_LENGTH));
+        }
+        return moderatePendingPlace(id, moderatorOrAdmin, PlaceStatus.REJECTED, reason.trim());
     }
 
-    private PlaceResponse moderatePendingPlace(Long id, boolean moderatorOrAdmin, PlaceStatus targetStatus) {
+    private PlaceResponse moderatePendingPlace(Long id, boolean moderatorOrAdmin, PlaceStatus targetStatus, String rejectionReason) {
         assertCanModerate(moderatorOrAdmin);
         Place place = placeRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Place %d not found".formatted(id)));
         if (place.getStatus() != PlaceStatus.PENDING_MODERATION) {
             throw new IllegalStateException("Only places pending moderation can be published or rejected");
         }
+        place.setRejectionReason(rejectionReason);
         place.setStatus(targetStatus);
         return PlaceResponse.from(place);
     }
