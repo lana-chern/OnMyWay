@@ -31,6 +31,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/places").hasRole("ORGANIZER")
                         .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/places/{id}/submit-for-moderation").hasRole("ORGANIZER")
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/places/{id}/manage").hasAnyRole("ORGANIZER", "MODERATOR", "ADMIN")
                         .requestMatchers("/api/moderation/**").hasAnyRole("MODERATOR", "ADMIN")
                         .requestMatchers(org.springframework.http.HttpMethod.PUT, "/api/places/{id}").hasAnyRole("ORGANIZER", "MODERATOR", "ADMIN")
                         .requestMatchers(org.springframework.http.HttpMethod.DELETE, "/api/places/{id}").hasAnyRole("ORGANIZER", "ADMIN")

@@ -48,6 +48,9 @@ public class Place {
     @Column(nullable = false)
     private PlaceStatus status = PlaceStatus.DRAFT;
 
+    @Column(name = "rejection_reason", columnDefinition = "TEXT")
+    private String rejectionReason;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 

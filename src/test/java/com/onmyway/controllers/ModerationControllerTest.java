@@ -120,20 +120,137 @@ class ModerationControllerTest {
     }
 
     @Test
-    void moderatorCanRejectPendingPlaceAndOwnerCanResubmitIt() throws Exception {
+    void moderatorCanRejectPendingPlaceWithReasonAndOwnerCanReadItAndResubmit() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("moderation-reject-owner@example.com", Role.ORGANIZER));
         User moderator = userRepository.saveAndFlush(testUser("moderation-reject-mod@example.com", Role.MODERATOR));
         Place place = placeRepository.saveAndFlush(place(owner, "Pending place", PlaceStatus.PENDING_MODERATION));
 
         mockMvc.perform(post("/api/moderation/places/{id}/reject", place.getId())
-                        .with(user(principal(moderator))))
+                        .with(user(principal(moderator)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"Missing opening hours\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("REJECTED"));
+                .andExpect(jsonPath("$.status").value("REJECTED"))
+                .andExpect(jsonPath("$.rejectionReason").value("Missing opening hours"));
+
+        mockMvc.perform(get("/api/places/{id}/manage", place.getId()).with(user(principal(owner))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("REJECTED"))
+                .andExpect(jsonPath("$.rejectionReason").value("Missing opening hours"));
 
         mockMvc.perform(post("/api/places/{id}/submit-for-moderation", place.getId())
                         .with(user(principal(owner))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("PENDING_MODERATION"));
+                .andExpect(jsonPath("$.status").value("PENDING_MODERATION"))
+                .andExpect(jsonPath("$.rejectionReason").value(org.hamcrest.Matchers.nullValue()));
+
+        assertThat(placeRepository.findById(place.getId()).orElseThrow().getRejectionReason()).isNull();
+    }
+
+    @Test
+    void rejectionReasonIsRequired() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("moderation-empty-reason-owner@example.com", Role.ORGANIZER));
+        User moderator = userRepository.saveAndFlush(testUser("moderation-empty-reason-mod@example.com", Role.MODERATOR));
+        Place place = placeRepository.saveAndFlush(place(owner, "Pending place", PlaceStatus.PENDING_MODERATION));
+
+        mockMvc.perform(post("/api/moderation/places/{id}/reject", place.getId())
+                        .with(user(principal(moderator)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"   \"}"))
+                .andExpect(status().isBadRequest());
+
+        assertThat(placeRepository.findById(place.getId()).orElseThrow().getStatus())
+                .isEqualTo(PlaceStatus.PENDING_MODERATION);
+    }
+
+    @Test
+    void missingOrNullRejectionReasonIsRejected() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("moderation-missing-reason-owner@example.com", Role.ORGANIZER));
+        User moderator = userRepository.saveAndFlush(testUser("moderation-missing-reason-mod@example.com", Role.MODERATOR));
+        Place place = placeRepository.saveAndFlush(place(owner, "Pending place", PlaceStatus.PENDING_MODERATION));
+
+        mockMvc.perform(post("/api/moderation/places/{id}/reject", place.getId())
+                        .with(user(principal(moderator)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(post("/api/moderation/places/{id}/reject", place.getId())
+                        .with(user(principal(moderator)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":null}"))
+                .andExpect(status().isBadRequest());
+
+        assertThat(placeRepository.findById(place.getId()).orElseThrow().getStatus())
+                .isEqualTo(PlaceStatus.PENDING_MODERATION);
+        assertThat(placeRepository.findById(place.getId()).orElseThrow().getRejectionReason()).isNull();
+    }
+
+    @Test
+    void rejectionReasonMustNotExceedOneThousandCharactersAfterTrimming() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("moderation-long-reason-owner@example.com", Role.ORGANIZER));
+        User moderator = userRepository.saveAndFlush(testUser("moderation-long-reason-mod@example.com", Role.MODERATOR));
+        Place place = placeRepository.saveAndFlush(place(owner, "Pending place", PlaceStatus.PENDING_MODERATION));
+        String tooLongReason = "x".repeat(1001);
+
+        mockMvc.perform(post("/api/moderation/places/{id}/reject", place.getId())
+                        .with(user(principal(moderator)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"" + tooLongReason + "\"}"))
+                .andExpect(status().isBadRequest());
+
+        assertThat(placeRepository.findById(place.getId()).orElseThrow().getStatus())
+                .isEqualTo(PlaceStatus.PENDING_MODERATION);
+        assertThat(placeRepository.findById(place.getId()).orElseThrow().getRejectionReason()).isNull();
+    }
+
+    @Test
+    void strippedUnicodeWhitespaceAroundMaximumLengthReasonIsAccepted() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("moderation-boundary-reason-owner@example.com", Role.ORGANIZER));
+        User moderator = userRepository.saveAndFlush(testUser("moderation-boundary-reason-mod@example.com", Role.MODERATOR));
+        Place place = placeRepository.saveAndFlush(place(owner, "Pending place", PlaceStatus.PENDING_MODERATION));
+        String maxLengthReason = "x".repeat(1000);
+        String reasonWithSurroundingWhitespace = "\u2003" + maxLengthReason + "\u2003";
+
+        mockMvc.perform(post("/api/moderation/places/{id}/reject", place.getId())
+                        .with(user(principal(moderator)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"" + reasonWithSurroundingWhitespace + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("REJECTED"))
+                .andExpect(jsonPath("$.rejectionReason").value(maxLengthReason));
+
+        assertThat(placeRepository.findById(place.getId()).orElseThrow().getRejectionReason())
+                .isEqualTo(maxLengthReason);
+    }
+
+    @Test
+    void anotherOrganizerCannotReadRejectedPlaceManagementDetails() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("moderation-manage-owner@example.com", Role.ORGANIZER));
+        User anotherOrganizer = userRepository.saveAndFlush(testUser("moderation-manage-other@example.com", Role.ORGANIZER));
+        Place place = placeRepository.saveAndFlush(place(owner, "Rejected place", PlaceStatus.REJECTED));
+        place.setRejectionReason("Add accurate opening hours");
+        placeRepository.saveAndFlush(place);
+
+        mockMvc.perform(get("/api/places/{id}/manage", place.getId()).with(user(principal(anotherOrganizer))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void moderatorPublishingPlaceClearsOldRejectionReason() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("moderation-publish-reason-owner@example.com", Role.ORGANIZER));
+        User moderator = userRepository.saveAndFlush(testUser("moderation-publish-reason-mod@example.com", Role.MODERATOR));
+        Place place = placeRepository.saveAndFlush(place(owner, "Pending place", PlaceStatus.PENDING_MODERATION));
+        place.setRejectionReason("Old rejection reason");
+        placeRepository.saveAndFlush(place);
+
+        mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
+                        .with(user(principal(moderator))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PUBLISHED"))
+                .andExpect(jsonPath("$.rejectionReason").value(org.hamcrest.Matchers.nullValue()));
+
+        assertThat(placeRepository.findById(place.getId()).orElseThrow().getRejectionReason()).isNull();
     }
 
     @Test

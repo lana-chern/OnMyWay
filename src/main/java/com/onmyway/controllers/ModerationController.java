@@ -3,6 +3,7 @@ package com.onmyway.controllers;
 import com.onmyway.api.PlaceService;
 import com.onmyway.auth.OnMyWayUserDetails;
 import com.onmyway.api.dto.PlaceResponse;
+import com.onmyway.api.dto.RejectPlaceRequest;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -28,8 +29,10 @@ public class ModerationController {
     }
 
     @PostMapping("/{id}/reject")
-    public PlaceResponse reject(@PathVariable Long id, @AuthenticationPrincipal OnMyWayUserDetails principal) {
-        return placeService.reject(id, canModerate(principal));
+    public PlaceResponse reject(@PathVariable Long id,
+                                @RequestBody RejectPlaceRequest request,
+                                @AuthenticationPrincipal OnMyWayUserDetails principal) {
+        return placeService.reject(id, canModerate(principal), request.reason());
     }
 
     private boolean canModerate(OnMyWayUserDetails principal) {

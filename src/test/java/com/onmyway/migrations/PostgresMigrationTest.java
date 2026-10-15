@@ -26,10 +26,10 @@ class PostgresMigrationTest {
             Flyway flyway = flyway(schema);
             var result = flyway.migrate();
 
-            assertEquals(3, result.migrationsExecuted);
+            assertEquals(4, result.migrationsExecuted);
             assertColumnExists(schema, "places", "owner_id");
-            assertEquals(3L, queryLong(schema,
-                    "SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE AND version IN ('1', '2', '3')"));
+            assertEquals(4L, queryLong(schema,
+                    "SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE AND version IN ('1', '2', '3', '4')"));
             assertEquals(0L, queryLong(schema, "SELECT COUNT(*) FROM users WHERE email = '" + LEGACY_EMAIL + "'"));
             assertTrue(hasConstraint(schema, "places", "fk_places_owner"));
             assertTrue(hasIndex(schema, "idx_places_owner_id"));
@@ -57,7 +57,7 @@ class PostgresMigrationTest {
 
             var result = flyway(schema).migrate();
 
-            assertEquals(2, result.migrationsExecuted, "V2 and V3 should run after baseline V1");
+            assertEquals(3, result.migrationsExecuted, "V2, V3, and V4 should run after baseline V1");
             assertColumnExists(schema, "places", "owner_id");
             assertColumnIsNotNull(schema, "places", "owner_id");
             assertTrue(hasConstraint(schema, "places", "fk_places_owner"));
@@ -75,6 +75,8 @@ class PostgresMigrationTest {
                     "SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE AND version = '2'"));
             assertEquals(1L, queryLong(schema,
                     "SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE AND version = '3'"));
+            assertEquals(1L, queryLong(schema,
+                    "SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE AND version = '4'"));
         });
     }
 
