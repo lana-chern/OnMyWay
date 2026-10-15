@@ -324,6 +324,29 @@ class ModerationControllerTest {
                 .isEqualTo("Updated by first request");
     }
 
+
+    @Test
+    void competingModerationDecisionsCannotOverwriteEachOther() {
+        User owner = userRepository.saveAndFlush(testUser("moderation-race-owner@example.com", Role.ORGANIZER));
+        Place place = placeRepository.saveAndFlush(place(owner, "Competing moderation", PlaceStatus.PENDING_MODERATION));
+
+        Place publishRequest = placeRepository.findById(place.getId()).orElseThrow();
+        Place rejectRequest = placeRepository.findById(place.getId()).orElseThrow();
+
+        publishRequest.setStatus(PlaceStatus.PUBLISHED);
+        publishRequest.setRejectionReason(null);
+        placeRepository.saveAndFlush(publishRequest);
+
+        rejectRequest.setStatus(PlaceStatus.REJECTED);
+        rejectRequest.setRejectionReason("Rejected by stale moderation request");
+        assertThatThrownBy(() -> placeRepository.saveAndFlush(rejectRequest))
+                .isInstanceOf(OptimisticLockingFailureException.class);
+
+        Place persisted = placeRepository.findById(place.getId()).orElseThrow();
+        assertThat(persisted.getStatus()).isEqualTo(PlaceStatus.PUBLISHED);
+        assertThat(persisted.getRejectionReason()).isNull();
+    }
+
     private OnMyWayUserDetails principal(User user) {
         return new OnMyWayUserDetails(
                 user.getId(),
