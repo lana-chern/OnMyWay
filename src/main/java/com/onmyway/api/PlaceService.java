@@ -117,10 +117,11 @@ public class PlaceService {
         if (reason == null || reason.isBlank()) {
             throw new IllegalArgumentException("A rejection reason is required");
         }
-        if (reason.length() > MAX_REJECTION_REASON_LENGTH) {
+        String normalizedReason = reason.trim();
+        if (normalizedReason.length() > MAX_REJECTION_REASON_LENGTH) {
             throw new IllegalArgumentException("Rejection reason must be at most %d characters".formatted(MAX_REJECTION_REASON_LENGTH));
         }
-        return moderatePendingPlace(id, moderatorOrAdmin, PlaceStatus.REJECTED, reason.trim());
+        return moderatePendingPlace(id, moderatorOrAdmin, PlaceStatus.REJECTED, normalizedReason);
     }
 
     private PlaceResponse moderatePendingPlace(Long id, boolean moderatorOrAdmin, PlaceStatus targetStatus, String rejectionReason) {
