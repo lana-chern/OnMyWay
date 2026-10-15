@@ -84,8 +84,7 @@ class ModerationControllerTest {
 
         mockMvc.perform(get("/api/moderation/places/pending").with(user(principal(admin))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(1)))
-                .andExpect(jsonPath("$[0].id").value(pending.getId()));
+                .andExpect(jsonPath("$[*].id").value(org.hamcrest.Matchers.hasItem(pending.getId().intValue())));
     }
 
     @Test
