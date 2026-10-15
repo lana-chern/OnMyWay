@@ -205,12 +205,12 @@ class ModerationControllerTest {
     }
 
     @Test
-    void trimmedRejectionReasonOfExactlyOneThousandCharactersIsAccepted() throws Exception {
+    void strippedUnicodeWhitespaceAroundMaximumLengthReasonIsAccepted() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("moderation-boundary-reason-owner@example.com", Role.ORGANIZER));
         User moderator = userRepository.saveAndFlush(testUser("moderation-boundary-reason-mod@example.com", Role.MODERATOR));
         Place place = placeRepository.saveAndFlush(place(owner, "Pending place", PlaceStatus.PENDING_MODERATION));
         String maxLengthReason = "x".repeat(1000);
-        String reasonWithSurroundingWhitespace = "  " + maxLengthReason + "  ";
+        String reasonWithSurroundingWhitespace = "\u2003" + maxLengthReason + "\u2003";
 
         mockMvc.perform(post("/api/moderation/places/{id}/reject", place.getId())
                         .with(user(principal(moderator)))
