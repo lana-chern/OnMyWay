@@ -117,20 +117,59 @@ class ModerationControllerTest {
     }
 
     @Test
-    void moderatorCanRejectPendingPlaceAndOwnerCanResubmitIt() throws Exception {
+    void moderatorCanRejectPendingPlaceWithReasonAndOwnerCanReadItAndResubmit() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("moderation-reject-owner@example.com", Role.ORGANIZER));
         User moderator = userRepository.saveAndFlush(testUser("moderation-reject-mod@example.com", Role.MODERATOR));
         Place place = placeRepository.saveAndFlush(place(owner, "Pending place", PlaceStatus.PENDING_MODERATION));
 
         mockMvc.perform(post("/api/moderation/places/{id}/reject", place.getId())
-                        .with(user(principal(moderator))))
+                        .with(user(principal(moderator)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\\"reason\\":\\"Missing opening hours\\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("REJECTED"));
+                .andExpect(jsonPath("$.status").value("REJECTED"))
+                .andExpect(jsonPath("$.rejectionReason").value("Missing opening hours"));
+
+        mockMvc.perform(get("/api/places/{id}/manage", place.getId()).with(user(principal(owner))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("REJECTED"))
+                .andExpect(jsonPath("$.rejectionReason").value("Missing opening hours"));
 
         mockMvc.perform(post("/api/places/{id}/submit-for-moderation", place.getId())
                         .with(user(principal(owner))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("PENDING_MODERATION"));
+                .andExpect(jsonPath("$.status").value("PENDING_MODERATION"))
+                .andExpect(jsonPath("$.rejectionReason").value(org.hamcrest.Matchers.nullValue()));
+
+        assertThat(placeRepository.findById(place.getId()).orElseThrow().getRejectionReason()).isNull();
+    }
+
+    @Test
+    void rejectionReasonIsRequired() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("moderation-empty-reason-owner@example.com", Role.ORGANIZER));
+        User moderator = userRepository.saveAndFlush(testUser("moderation-empty-reason-mod@example.com", Role.MODERATOR));
+        Place place = placeRepository.saveAndFlush(place(owner, "Pending place", PlaceStatus.PENDING_MODERATION));
+
+        mockMvc.perform(post("/api/moderation/places/{id}/reject", place.getId())
+                        .with(user(principal(moderator)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\\"reason\\":\\"   \\"}"))
+                .andExpect(status().isBadRequest());
+
+        assertThat(placeRepository.findById(place.getId()).orElseThrow().getStatus())
+                .isEqualTo(PlaceStatus.PENDING_MODERATION);
+    }
+
+    @Test
+    void anotherOrganizerCannotReadRejectedPlaceManagementDetails() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("moderation-manage-owner@example.com", Role.ORGANIZER));
+        User anotherOrganizer = userRepository.saveAndFlush(testUser("moderation-manage-other@example.com", Role.ORGANIZER));
+        Place place = placeRepository.saveAndFlush(place(owner, "Rejected place", PlaceStatus.REJECTED));
+        place.setRejectionReason("Add accurate opening hours");
+        placeRepository.saveAndFlush(place);
+
+        mockMvc.perform(get("/api/places/{id}/manage", place.getId()).with(user(principal(anotherOrganizer))))
+                .andExpect(status().isForbidden());
     }
 
     @Test
