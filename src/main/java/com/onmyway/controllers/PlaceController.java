@@ -25,6 +25,12 @@ public class PlaceController {
     @GetMapping("/{id}")
     public PlaceResponse findById(@PathVariable Long id) { return placeService.findById(id); }
 
+    @GetMapping("/{id}/manage")
+    public PlaceResponse findForManagement(@PathVariable Long id,
+                                           @AuthenticationPrincipal OnMyWayUserDetails principal) {
+        return placeService.findForManagement(id, principal.getId(), canManageAnyPlace(principal));
+    }
+
     @PostMapping
     public ResponseEntity<PlaceResponse> create(@RequestBody CreatePlaceRequest request, @AuthenticationPrincipal OnMyWayUserDetails principal) {
         PlaceResponse response = placeService.create(request, principal.getId());
