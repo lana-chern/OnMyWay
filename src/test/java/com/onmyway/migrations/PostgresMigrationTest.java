@@ -61,7 +61,7 @@ class PostgresMigrationTest {
             assertColumnExists(schema, "places", "owner_id");
             assertColumnIsNotNull(schema, "places", "owner_id");
             assertTrue(hasConstraint(schema, "places", "fk_places_owner"));
-            assertTrue(hasIndex(schema, "places", "idx_places_owner_id"));
+            assertTrue(hasIndex(schema, "idx_places_owner_id"));
             assertEquals(1L, queryLong(schema,
                     "SELECT COUNT(*) FROM users WHERE email = '" + LEGACY_EMAIL + "' AND status = 'BLOCKED'"));
             assertEquals(1L, queryLong(schema, """
