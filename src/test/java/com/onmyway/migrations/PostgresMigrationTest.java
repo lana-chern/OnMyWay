@@ -28,7 +28,7 @@ class PostgresMigrationTest {
 
             assertEquals(3, result.migrationsExecuted);
             assertColumnExists(schema, "places", "owner_id");
-            assertEquals(2L, queryLong(schema,
+            assertEquals(3L, queryLong(schema,
                     "SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE AND version IN ('1', '2', '3')"));
             assertEquals(0L, queryLong(schema, "SELECT COUNT(*) FROM users WHERE email = '" + LEGACY_EMAIL + "'"));
             assertTrue(hasConstraint(schema, "places", "fk_places_owner"));
@@ -61,7 +61,7 @@ class PostgresMigrationTest {
             assertColumnExists(schema, "places", "owner_id");
             assertColumnIsNotNull(schema, "places", "owner_id");
             assertTrue(hasConstraint(schema, "places", "fk_places_owner"));
-            assertTrue(hasIndex(schema, "idx_places_owner_id"));
+            assertTrue(hasIndex(schema, "places", "idx_places_owner_id"));
             assertEquals(1L, queryLong(schema,
                     "SELECT COUNT(*) FROM users WHERE email = '" + LEGACY_EMAIL + "' AND status = 'BLOCKED'"));
             assertEquals(1L, queryLong(schema, """
@@ -117,8 +117,7 @@ class PostgresMigrationTest {
     private Flyway flyway(String schema) {
         return Flyway.configure()
                 .dataSource(requiredEnv("MIGRATION_TEST_JDBC_URL"),
-                        requiredEnv("MIGRATION_TEST_DB_USERNAME"),
-                        requiredEnv("MIGRATION_TEST_DB_PASSWORD"))
+                        requiredEnv("MIGRATION_TEST_DB_USERNAME"), requiredEnv("MIGRATION_TEST_DB_PASSWORD"))
                 .defaultSchema(schema)
                 .schemas(schema)
                 .baselineOnMigrate(true)
