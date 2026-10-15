@@ -1,5 +1,6 @@
 package com.onmyway.api.exception;
 
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -32,6 +33,23 @@ public class GlobalExceptionHandler {
     ProblemDetail handleIllegalArgument(IllegalArgumentException exception) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
         problem.setTitle("Invalid request");
+        return problem;
+    }
+
+    @ExceptionHandler(IllegalStateException.class)
+    ProblemDetail handleIllegalState(IllegalStateException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
+        problem.setTitle("Invalid state transition");
+        return problem;
+    }
+
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    ProblemDetail handleOptimisticLockingFailure(OptimisticLockingFailureException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT,
+                "The place was changed by another request. Reload it and try again."
+        );
+        problem.setTitle("Concurrent modification");
         return problem;
     }
 }

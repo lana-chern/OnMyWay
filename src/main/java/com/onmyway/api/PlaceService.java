@@ -61,10 +61,10 @@ public class PlaceService {
         return PlaceResponse.from(placeRepository.save(place));
     }
 
-    public PlaceResponse update(Long id, UpdatePlaceRequest request, Long actorId, boolean admin) {
+    public PlaceResponse update(Long id, UpdatePlaceRequest request, Long actorId, boolean canManageAnyPlace) {
         validateRequest(id, request.name(), request.latitude(), request.longitude(), request.photos(), request.contacts(), request.openingHours());
         Place place = placeRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Place %d not found".formatted(id)));
-        assertCanManage(place, actorId, admin);
+        assertCanManage(place, actorId, canManageAnyPlace);
         if (place.getStatus() == PlaceStatus.ARCHIVED) {
             throw new ResourceNotFoundException("Place %d not found".formatted(id));
         }
@@ -79,8 +79,51 @@ public class PlaceService {
         place.setStatus(PlaceStatus.ARCHIVED);
     }
 
-    private void assertCanManage(Place place, Long actorId, boolean admin) {
-        if (!admin && (place.getOwner() == null || !Objects.equals(place.getOwner().getId(), actorId))) {
+    public PlaceResponse submitForModeration(Long id, Long actorId) {
+        Place place = placeRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Place %d not found".formatted(id)));
+        assertCanManage(place, actorId, false);
+        if (place.getStatus() != PlaceStatus.DRAFT && place.getStatus() != PlaceStatus.REJECTED) {
+            throw new IllegalStateException("Only draft or rejected places can be submitted for moderation");
+        }
+        place.setStatus(PlaceStatus.PENDING_MODERATION);
+        return PlaceResponse.from(place);
+    }
+
+    @Transactional(readOnly = true)
+    public List<PlaceResponse> findPendingModeration(boolean moderatorOrAdmin) {
+        assertCanModerate(moderatorOrAdmin);
+        return placeRepository.findByStatusOrderByCreatedAtAsc(PlaceStatus.PENDING_MODERATION)
+                .stream().map(PlaceResponse::from).toList();
+    }
+
+    public PlaceResponse publish(Long id, boolean moderatorOrAdmin) {
+        return moderatePendingPlace(id, moderatorOrAdmin, PlaceStatus.PUBLISHED);
+    }
+
+    public PlaceResponse reject(Long id, boolean moderatorOrAdmin) {
+        return moderatePendingPlace(id, moderatorOrAdmin, PlaceStatus.REJECTED);
+    }
+
+    private PlaceResponse moderatePendingPlace(Long id, boolean moderatorOrAdmin, PlaceStatus targetStatus) {
+        assertCanModerate(moderatorOrAdmin);
+        Place place = placeRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Place %d not found".formatted(id)));
+        if (place.getStatus() != PlaceStatus.PENDING_MODERATION) {
+            throw new IllegalStateException("Only places pending moderation can be published or rejected");
+        }
+        place.setStatus(targetStatus);
+        return PlaceResponse.from(place);
+    }
+
+    private void assertCanModerate(boolean moderatorOrAdmin) {
+        if (!moderatorOrAdmin) {
+            throw new AccessDeniedException("Moderator or administrator role is required");
+        }
+    }
+
+    private void assertCanManage(Place place, Long actorId, boolean canManageAnyPlace) {
+        if (!canManageAnyPlace && (place.getOwner() == null || !Objects.equals(place.getOwner().getId(), actorId))) {
             throw new AccessDeniedException("You can manage only your own places");
         }
     }

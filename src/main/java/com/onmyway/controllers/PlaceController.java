@@ -33,7 +33,7 @@ public class PlaceController {
 
     @PutMapping("/{id}")
     public PlaceResponse update(@PathVariable Long id, @RequestBody UpdatePlaceRequest request, @AuthenticationPrincipal OnMyWayUserDetails principal) {
-        return placeService.update(id, request, principal.getId(), isAdmin(principal));
+        return placeService.update(id, request, principal.getId(), canManageAnyPlace(principal));
     }
 
     @DeleteMapping("/{id}")
@@ -42,7 +42,20 @@ public class PlaceController {
         return ResponseEntity.noContent().build();
     }
 
+    @PostMapping("/{id}/submit-for-moderation")
+    public PlaceResponse submitForModeration(@PathVariable Long id, @AuthenticationPrincipal OnMyWayUserDetails principal) {
+        return placeService.submitForModeration(id, principal.getId());
+    }
+
+    private boolean canManageAnyPlace(OnMyWayUserDetails principal) {
+        return hasRole(principal, "ROLE_MODERATOR") || isAdmin(principal);
+    }
+
     private boolean isAdmin(OnMyWayUserDetails principal) {
-        return principal.getAuthorities().stream().anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()));
+        return hasRole(principal, "ROLE_ADMIN");
+    }
+
+    private boolean hasRole(OnMyWayUserDetails principal, String role) {
+        return principal.getAuthorities().stream().anyMatch(authority -> role.equals(authority.getAuthority()));
     }
 }

@@ -26,10 +26,10 @@ class PostgresMigrationTest {
             Flyway flyway = flyway(schema);
             var result = flyway.migrate();
 
-            assertEquals(2, result.migrationsExecuted);
+            assertEquals(3, result.migrationsExecuted);
             assertColumnExists(schema, "places", "owner_id");
-            assertEquals(2L, queryLong(schema,
-                    "SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE AND version IN ('1', '2')"));
+            assertEquals(3L, queryLong(schema,
+                    "SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE AND version IN ('1', '2', '3')"));
             assertEquals(0L, queryLong(schema, "SELECT COUNT(*) FROM users WHERE email = '" + LEGACY_EMAIL + "'"));
             assertTrue(hasConstraint(schema, "places", "fk_places_owner"));
             assertTrue(hasIndex(schema, "idx_places_owner_id"));
@@ -57,7 +57,7 @@ class PostgresMigrationTest {
 
             var result = flyway(schema).migrate();
 
-            assertEquals(1, result.migrationsExecuted, "Only V2 should run after baseline V1");
+            assertEquals(2, result.migrationsExecuted, "V2 and V3 should run after baseline V1");
             assertColumnExists(schema, "places", "owner_id");
             assertColumnIsNotNull(schema, "places", "owner_id");
             assertTrue(hasConstraint(schema, "places", "fk_places_owner"));
@@ -73,6 +73,8 @@ class PostgresMigrationTest {
                     "SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE AND version = '1' AND type = 'BASELINE'"));
             assertEquals(1L, queryLong(schema,
                     "SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE AND version = '2'"));
+            assertEquals(1L, queryLong(schema,
+                    "SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE AND version = '3'"));
         });
     }
 
@@ -115,8 +117,7 @@ class PostgresMigrationTest {
     private Flyway flyway(String schema) {
         return Flyway.configure()
                 .dataSource(requiredEnv("MIGRATION_TEST_JDBC_URL"),
-                        requiredEnv("MIGRATION_TEST_DB_USERNAME"),
-                        requiredEnv("MIGRATION_TEST_DB_PASSWORD"))
+                        requiredEnv("MIGRATION_TEST_DB_USERNAME"), requiredEnv("MIGRATION_TEST_DB_PASSWORD"))
                 .defaultSchema(schema)
                 .schemas(schema)
                 .baselineOnMigrate(true)
