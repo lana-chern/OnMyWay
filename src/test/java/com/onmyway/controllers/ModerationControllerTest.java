@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -21,6 +22,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import java.math.BigDecimal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -66,12 +68,16 @@ class ModerationControllerTest {
         User owner = userRepository.saveAndFlush(testUser("moderation-list-owner@example.com", Role.ORGANIZER));
         User moderator = userRepository.saveAndFlush(testUser("moderation-list-moderator@example.com", Role.MODERATOR));
         Place pending = placeRepository.saveAndFlush(place(owner, "Pending", PlaceStatus.PENDING_MODERATION));
-        placeRepository.saveAndFlush(place(owner, "Draft", PlaceStatus.DRAFT));
-        placeRepository.saveAndFlush(place(owner, "Published", PlaceStatus.PUBLISHED));
+        Place draft = placeRepository.saveAndFlush(place(owner, "Draft", PlaceStatus.DRAFT));
+        Place published = placeRepository.saveAndFlush(place(owner, "Published", PlaceStatus.PUBLISHED));
 
         mockMvc.perform(get("/api/moderation/places/pending").with(user(principal(moderator))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[*].id").value(org.hamcrest.Matchers.hasItem(pending.getId().intValue())));
+                .andExpect(jsonPath("$[*].id").value(org.hamcrest.Matchers.hasItem(pending.getId().intValue())))
+                .andExpect(jsonPath("$[*].id").value(org.hamcrest.Matchers.not(org.hamcrest.Matchers.hasItem(draft.getId().intValue()))))
+                .andExpect(jsonPath("$[*].id").value(org.hamcrest.Matchers.not(org.hamcrest.Matchers.hasItem(published.getId().intValue()))))
+                .andExpect(jsonPath("$[*].status").value(
+                        org.hamcrest.Matchers.everyItem(org.hamcrest.Matchers.is("PENDING_MODERATION"))));
     }
 
     @Test
@@ -122,7 +128,7 @@ class ModerationControllerTest {
         mockMvc.perform(post("/api/moderation/places/{id}/reject", place.getId())
                         .with(user(principal(moderator)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"reason\":\"Missing opening hours\"}"))
+                        .content("{\\"reason\\":\\"Missing opening hours\\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("REJECTED"))
                 .andExpect(jsonPath("$.rejectionReason").value("Missing opening hours"));
@@ -150,7 +156,7 @@ class ModerationControllerTest {
         mockMvc.perform(post("/api/moderation/places/{id}/reject", place.getId())
                         .with(user(principal(moderator)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"reason\":\"   \"}"))
+                        .content("{\\"reason\\":\\"   \\"}"))
                 .andExpect(status().isBadRequest());
 
         assertThat(placeRepository.findById(place.getId()).orElseThrow().getStatus())
@@ -167,6 +173,23 @@ class ModerationControllerTest {
 
         mockMvc.perform(get("/api/places/{id}/manage", place.getId()).with(user(principal(anotherOrganizer))))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void moderatorPublishingPlaceClearsOldRejectionReason() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("moderation-publish-reason-owner@example.com", Role.ORGANIZER));
+        User moderator = userRepository.saveAndFlush(testUser("moderation-publish-reason-mod@example.com", Role.MODERATOR));
+        Place place = placeRepository.saveAndFlush(place(owner, "Pending place", PlaceStatus.PENDING_MODERATION));
+        place.setRejectionReason("Old rejection reason");
+        placeRepository.saveAndFlush(place);
+
+        mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
+                        .with(user(principal(moderator))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PUBLISHED"))
+                .andExpect(jsonPath("$.rejectionReason").value(org.hamcrest.Matchers.nullValue()));
+
+        assertThat(placeRepository.findById(place.getId()).orElseThrow().getRejectionReason()).isNull();
     }
 
     @Test
@@ -220,6 +243,24 @@ class ModerationControllerTest {
                 .andExpect(status().isConflict());
 
         assertThat(placeRepository.findById(place.getId()).orElseThrow().getStatus()).isEqualTo(PlaceStatus.PUBLISHED);
+    }
+
+    @Test
+    void stalePlaceUpdateIsRejectedByOptimisticLocking() {
+        User owner = userRepository.saveAndFlush(testUser("moderation-version-owner@example.com", Role.ORGANIZER));
+        Place place = placeRepository.saveAndFlush(place(owner, "Original", PlaceStatus.DRAFT));
+
+        Place staleCopy = placeRepository.findById(place.getId()).orElseThrow();
+        Place currentCopy = placeRepository.findById(place.getId()).orElseThrow();
+        currentCopy.setName("Updated by first request");
+        placeRepository.saveAndFlush(currentCopy);
+
+        staleCopy.setName("Stale update");
+        assertThatThrownBy(() -> placeRepository.saveAndFlush(staleCopy))
+                .isInstanceOf(OptimisticLockingFailureException.class);
+
+        assertThat(placeRepository.findById(place.getId()).orElseThrow().getName())
+                .isEqualTo("Updated by first request");
     }
 
     private OnMyWayUserDetails principal(User user) {

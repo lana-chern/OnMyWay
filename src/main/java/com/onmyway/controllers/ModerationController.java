@@ -1,9 +1,9 @@
 package com.onmyway.controllers;
 
 import com.onmyway.api.PlaceService;
+import com.onmyway.auth.OnMyWayUserDetails;
 import com.onmyway.api.dto.PlaceResponse;
 import com.onmyway.api.dto.RejectPlaceRequest;
-import com.onmyway.auth.OnMyWayUserDetails;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
