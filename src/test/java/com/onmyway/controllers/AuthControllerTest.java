@@ -87,6 +87,46 @@ class AuthControllerTest {
     }
 
     @Test
+    void registersOrganizerWhenAccountTypeIsLowercase() throws Exception {
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "lowercase-organizer@example.com",
+                                  "password": "password123",
+                                  "displayName": "Lowercase Organizer",
+                                  "accountType": "organizer"
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.roles", hasItem(Role.ORGANIZER.name())));
+
+        User savedUser = userRepository.findByEmailIgnoreCase("lowercase-organizer@example.com").orElseThrow();
+        assertThat(savedUser.getRoles()).contains(Role.ORGANIZER);
+        assertThat(savedUser.getRoles()).doesNotContain(Role.ADMIN, Role.MODERATOR);
+    }
+
+    @Test
+    void registersUserWhenAccountTypeIsBlank() throws Exception {
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "blank-account-type@example.com",
+                                  "password": "password123",
+                                  "displayName": "Default User",
+                                  "accountType": ""
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.roles", hasItem(Role.USER.name())));
+
+        User savedUser = userRepository.findByEmailIgnoreCase("blank-account-type@example.com").orElseThrow();
+        assertThat(savedUser.getRoles()).contains(Role.USER);
+        assertThat(savedUser.getRoles()).doesNotContain(Role.ORGANIZER, Role.ADMIN, Role.MODERATOR);
+    }
+
+    @Test
     void rejectsPrivilegedRoleDuringPublicRegistration() throws Exception {
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
