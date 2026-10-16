@@ -105,6 +105,24 @@ class AuthControllerTest {
     }
 
     @Test
+    void rejectsModeratorRoleDuringPublicRegistration() throws Exception {
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "moderator@example.com",
+                                  "password": "password123",
+                                  "displayName": "Moderator",
+                                  "accountType": "MODERATOR"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("Account type must be USER or ORGANIZER"));
+
+        assertThat(userRepository.findByEmailIgnoreCase("moderator@example.com")).isEmpty();
+    }
+
+    @Test
     void logsInWithValidCredentialsAndReturnsJwt() throws Exception {
         registerUser("test@example.com", "password123", "Alice");
 
