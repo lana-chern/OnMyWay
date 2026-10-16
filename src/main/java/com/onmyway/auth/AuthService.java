@@ -45,7 +45,7 @@ public class AuthService {
         user.setEmail(email);
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         user.setDisplayName(request.displayName().trim());
-        user.getRoles().add(Role.USER);
+        user.getRoles().add(registrationRole(request.accountType()));
         user = userRepository.save(user);
         return toResponse(user);
     }
@@ -93,6 +93,17 @@ public class AuthService {
         if (request.displayName() == null || request.displayName().isBlank() || request.displayName().length() > 100) {
             throw new IllegalArgumentException("Display name is required and must be at most 100 characters");
         }
+        registrationRole(request.accountType());
+    }
+
+    private Role registrationRole(String accountType) {
+        if (accountType == null || accountType.isBlank() || "USER".equalsIgnoreCase(accountType.trim())) {
+            return Role.USER;
+        }
+        if ("ORGANIZER".equalsIgnoreCase(accountType.trim())) {
+            return Role.ORGANIZER;
+        }
+        throw new IllegalArgumentException("Account type must be USER or ORGANIZER");
     }
 
     private void validateLoginRequest(LoginRequest request) {
