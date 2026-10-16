@@ -15,8 +15,12 @@ public record PlaceResponse(
         List<OpeningHoursResponse> openingHours) {
 
     public static PlaceResponse from(Place place) {
+        return from(place, place.getVersion());
+    }
+
+    public static PlaceResponse from(Place place, Long version) {
         return new PlaceResponse(
-                place.getId(), place.getVersion(), place.getCity().getId(), place.getName(), place.getDescription(),
+                place.getId(), version, place.getCity().getId(), place.getName(), place.getDescription(),
                 place.getLatitude(), place.getLongitude(), place.getStatus(), place.getRejectionReason(),
                 place.getPhotos().stream().map(PhotoResponse::from).toList(),
                 place.getContacts().stream().map(ContactResponse::from).toList(),
