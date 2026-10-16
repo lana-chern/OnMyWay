@@ -20,6 +20,11 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
 import java.math.BigDecimal;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -44,7 +49,8 @@ class ModerationControllerTest {
         mockMvc.perform(post("/api/places/{id}/submit-for-moderation", place.getId())
                         .with(user(principal(owner))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("PENDING_MODERATION"));
+                .andExpect(jsonPath("$.status").value("PENDING_MODERATION"))
+                .andExpect(jsonPath("$.version").value(1));
 
         assertThat(placeRepository.findById(place.getId()).orElseThrow().getStatus())
                 .isEqualTo(PlaceStatus.PENDING_MODERATION);
@@ -100,7 +106,8 @@ class ModerationControllerTest {
         mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
                         .with(user(principal(moderator))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("PUBLISHED"));
+                .andExpect(jsonPath("$.status").value("PUBLISHED"))
+                .andExpect(jsonPath("$.version").value(1));
 
         assertThat(placeRepository.findById(place.getId()).orElseThrow().getStatus()).isEqualTo(PlaceStatus.PUBLISHED);
     }
@@ -345,6 +352,59 @@ class ModerationControllerTest {
         Place persisted = placeRepository.findById(place.getId()).orElseThrow();
         assertThat(persisted.getStatus()).isEqualTo(PlaceStatus.PUBLISHED);
         assertThat(persisted.getRejectionReason()).isNull();
+    }
+
+
+    @Test
+    void concurrentPublishAndRejectRequestsReturnOneSuccessAndOneConflict() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("moderation-race-owner@example.com", Role.ORGANIZER));
+        User moderator = userRepository.saveAndFlush(testUser("moderation-race-mod@example.com", Role.MODERATOR));
+        User secondModerator = userRepository.saveAndFlush(testUser("moderation-race-mod-2@example.com", Role.MODERATOR));
+        Place place = placeRepository.saveAndFlush(place(owner, "Concurrent moderation", PlaceStatus.PENDING_MODERATION));
+
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<Integer> publishStatus = executor.submit(() -> {
+                ready.countDown();
+                if (!start.await(5, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("Timed out waiting to start publish request");
+                }
+                return mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
+                                .with(user(principal(moderator))))
+                        .andReturn().getResponse().getStatus();
+            });
+            Future<Integer> rejectStatus = executor.submit(() -> {
+                ready.countDown();
+                if (!start.await(5, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("Timed out waiting to start reject request");
+                }
+                return mockMvc.perform(post("/api/moderation/places/{id}/reject", place.getId())
+                                .with(user(principal(secondModerator)))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\\"reason\\":\\"Concurrent rejection\\"}"))
+                        .andReturn().getResponse().getStatus();
+            });
+
+            assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            int publishResponse = publishStatus.get(15, TimeUnit.SECONDS);
+            int rejectResponse = rejectStatus.get(15, TimeUnit.SECONDS);
+            assertThat(java.util.List.of(publishResponse, rejectResponse))
+                    .containsExactlyInAnyOrder(200, 409);
+
+            Place persisted = placeRepository.findById(place.getId()).orElseThrow();
+            assertThat(persisted.getStatus()).isIn(PlaceStatus.PUBLISHED, PlaceStatus.REJECTED);
+            if (persisted.getStatus() == PlaceStatus.PUBLISHED) {
+                assertThat(persisted.getRejectionReason()).isNull();
+            } else {
+                assertThat(persisted.getRejectionReason()).isEqualTo("Concurrent rejection");
+            }
+        } finally {
+            executor.shutdownNow();
+        }
     }
 
     private OnMyWayUserDetails principal(User user) {
