@@ -67,6 +67,44 @@ class AuthControllerTest {
     }
 
     @Test
+    void registersOrganizerAndReturnsOrganizerRole() throws Exception {
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "organizer@example.com",
+                                  "password": "password123",
+                                  "displayName": "Organizer",
+                                  "accountType": "ORGANIZER"
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.roles", hasItem(Role.ORGANIZER.name())));
+
+        User savedUser = userRepository.findByEmailIgnoreCase("organizer@example.com").orElseThrow();
+        assertThat(savedUser.getRoles()).contains(Role.ORGANIZER);
+        assertThat(savedUser.getRoles()).doesNotContain(Role.ADMIN, Role.MODERATOR);
+    }
+
+    @Test
+    void rejectsPrivilegedRoleDuringPublicRegistration() throws Exception {
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "admin@example.com",
+                                  "password": "password123",
+                                  "displayName": "Admin",
+                                  "accountType": "ADMIN"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("Account type must be USER or ORGANIZER"));
+
+        assertThat(userRepository.findByEmailIgnoreCase("admin@example.com")).isEmpty();
+    }
+
+    @Test
     void logsInWithValidCredentialsAndReturnsJwt() throws Exception {
         registerUser("test@example.com", "password123", "Alice");
 
