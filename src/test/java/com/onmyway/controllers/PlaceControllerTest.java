@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -34,6 +35,7 @@ class PlaceControllerTest {
     @Autowired CityRepository cityRepository;
     @Autowired PlaceRepository placeRepository;
     @Autowired UserRepository userRepository;
+    @Autowired JdbcTemplate jdbcTemplate;
 
     @Test
     void createsPlace() throws Exception {
@@ -146,7 +148,8 @@ class PlaceControllerTest {
         Place persisted = placeRepository.findById(place.getId()).orElseThrow();
         assertThat(persisted.getVersion()).isEqualTo(1L);
         assertThat(persisted.getName()).isEqualTo("Unchanged name");
-        assertThat(persisted.getPhotos()).extracting("url")
+        assertThat(jdbcTemplate.queryForList(
+                "select url from place_photos where place_id = ?", String.class, place.getId()))
                 .containsExactly("https://example.com/first.jpg");
     }
 
