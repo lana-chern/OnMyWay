@@ -92,8 +92,16 @@ public class PlaceService {
             throw new StalePlaceVersionException(request.version(), place.getVersion());
         }
 
-        // A Place version must also advance when only inverse child collections change.
-        entityManager.lock(place, LockModeType.OPTIMISTIC_FORCE_INCREMENT);
+        // Inverse child-collection changes do not necessarily dirty the Place row.
+        // Force the version only when scalar fields are unchanged; otherwise the normal
+        // entity UPDATE advances it and an extra force-increment would be redundant.
+        boolean scalarFieldsUnchanged = Objects.equals(place.getName(), request.name())
+                && Objects.equals(place.getDescription(), request.description())
+                && place.getLatitude().compareTo(request.latitude()) == 0
+                && place.getLongitude().compareTo(request.longitude()) == 0;
+        if (scalarFieldsUnchanged) {
+            entityManager.lock(place, LockModeType.OPTIMISTIC_FORCE_INCREMENT);
+        }
         apply(place, request.name(), request.description(), request.latitude(), request.longitude(), request.photos(), request.contacts(), request.openingHours());
         placeRepository.flush();
         return PlaceResponse.from(place);
