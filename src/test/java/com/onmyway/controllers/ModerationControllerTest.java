@@ -357,9 +357,9 @@ class ModerationControllerTest {
 
     @Test
     void concurrentPublishAndRejectRequestsReturnOneSuccessAndOneConflict() throws Exception {
-        User owner = userRepository.saveAndFlush(testUser("moderation-race-owner@example.com", Role.ORGANIZER));
-        User moderator = userRepository.saveAndFlush(testUser("moderation-race-mod@example.com", Role.MODERATOR));
-        User secondModerator = userRepository.saveAndFlush(testUser("moderation-race-mod-2@example.com", Role.MODERATOR));
+        User owner = userRepository.saveAndFlush(testUser("moderation-http-race-owner@example.com", Role.ORGANIZER));
+        User moderator = userRepository.saveAndFlush(testUser("moderation-http-race-mod@example.com", Role.MODERATOR));
+        User secondModerator = userRepository.saveAndFlush(testUser("moderation-http-race-mod-2@example.com", Role.MODERATOR));
         Place place = placeRepository.saveAndFlush(place(owner, "Concurrent moderation", PlaceStatus.PENDING_MODERATION));
 
         CountDownLatch ready = new CountDownLatch(2);
