@@ -131,16 +131,16 @@ class PlaceControllerTest {
         mockMvc.perform(put("/api/places/{id}", place.getId())
                         .with(user(principal(owner)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\\"version\\":0,\\"name\\":\\"Unchanged name\\",\\"latitude\\":52.360000,\\"longitude\\":4.885200," +
-                                "\\"photos\\":[{\\"url\\":\\"https://example.com/first.jpg\\",\\"position\\":0}]}"))
+                        .content("{\"version\":0,\"name\":\"Unchanged name\",\"latitude\":52.360000,\"longitude\":4.885200," +
+                                "\"photos\":[{\"url\":\"https://example.com/first.jpg\",\"position\":0}]}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.version").value(1));
 
         mockMvc.perform(put("/api/places/{id}", place.getId())
                         .with(user(principal(owner)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\\"version\\":0,\\"name\\":\\"Unchanged name\\",\\"latitude\\":52.360000,\\"longitude\\":4.885200," +
-                                "\\"photos\\":[{\\"url\\":\\"https://example.com/stale.jpg\\",\\"position\\":0}]}"))
+                        .content("{\"version\":0,\"name\":\"Unchanged name\",\"latitude\":52.360000,\"longitude\":4.885200," +
+                                "\"photos\":[{\"url\":\"https://example.com/stale.jpg\",\"position\":0}]}"))
                 .andExpect(status().isConflict());
 
         Place persisted = placeRepository.findById(place.getId()).orElseThrow();
