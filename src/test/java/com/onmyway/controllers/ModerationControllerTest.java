@@ -383,7 +383,7 @@ class ModerationControllerTest {
                 return mockMvc.perform(post("/api/moderation/places/{id}/reject", place.getId())
                                 .with(user(principal(secondModerator)))
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content("{\\"reason\\":\\"Concurrent rejection\\"}"))
+                                .content("{\"reason\":\"Concurrent rejection\"}"))
                         .andReturn().getResponse().getStatus();
             });
 
