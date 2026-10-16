@@ -7,6 +7,8 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import com.onmyway.api.exception.StalePlaceVersionException;
+
 import java.util.stream.Collectors;
 
 @RestControllerAdvice
@@ -40,6 +42,13 @@ public class GlobalExceptionHandler {
     ProblemDetail handleIllegalState(IllegalStateException exception) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
         problem.setTitle("Invalid state transition");
+        return problem;
+    }
+
+    @ExceptionHandler(StalePlaceVersionException.class)
+    ProblemDetail handleStalePlaceVersion(StalePlaceVersionException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
+        problem.setTitle("Concurrent modification");
         return problem;
     }
 

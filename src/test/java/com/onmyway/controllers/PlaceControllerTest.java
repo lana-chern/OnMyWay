@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -34,6 +35,7 @@ class PlaceControllerTest {
     @Autowired CityRepository cityRepository;
     @Autowired PlaceRepository placeRepository;
     @Autowired UserRepository userRepository;
+    @Autowired JdbcTemplate jdbcTemplate;
 
     @Test
     void createsPlace() throws Exception {
@@ -96,12 +98,74 @@ class PlaceControllerTest {
         mockMvc.perform(put("/api/places/{id}", place.getId())
                         .with(user(principal(owner)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\":\"New name\",\"description\":\"Updated description\",\"latitude\":52.370000,\"longitude\":4.900000}"))
+                        .content("{\"version\":0,\"name\":\"New name\",\"description\":\"Updated description\",\"latitude\":52.370000,\"longitude\":4.900000}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("New name"))
                 .andExpect(jsonPath("$.description").value("Updated description"))
                 .andExpect(jsonPath("$.latitude").value(52.370000))
                 .andExpect(jsonPath("$.longitude").value(4.900000));
+    }
+
+    @Test
+    void rejectsPlaceUpdateWithStaleVersionAndPreservesCurrentData() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("organizer-stale-version@example.com", Role.ORGANIZER));
+        City city = cityRepository.saveAndFlush(city("Amsterdam Stale Version"));
+        Place place = placeRepository.saveAndFlush(place(city, owner, "Current name", PlaceStatus.DRAFT));
+
+        mockMvc.perform(put("/api/places/{id}", place.getId())
+                        .with(user(principal(owner)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"version\":-1,\"name\":\"Stale update\",\"latitude\":52.370000,\"longitude\":4.900000}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.title").value("Concurrent modification"));
+
+        Place unchanged = placeRepository.findById(place.getId()).orElseThrow();
+        assertThat(unchanged.getName()).isEqualTo("Current name");
+        assertThat(unchanged.getVersion()).isEqualTo(0L);
+    }
+
+    @Test
+    void collectionOnlyUpdateIncrementsVersionAndRejectsStaleCollectionUpdate() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("organizer-collection-version@example.com", Role.ORGANIZER));
+        City city = cityRepository.saveAndFlush(city("Amsterdam Collection Version"));
+        Place place = placeRepository.saveAndFlush(place(city, owner, "Unchanged name", PlaceStatus.DRAFT));
+
+        mockMvc.perform(put("/api/places/{id}", place.getId())
+                        .with(user(principal(owner)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"version\":0,\"name\":\"Unchanged name\",\"latitude\":52.360000,\"longitude\":4.885200," +
+                                "\"photos\":[{\"url\":\"https://example.com/first.jpg\",\"position\":0}]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.version").value(1));
+
+        mockMvc.perform(put("/api/places/{id}", place.getId())
+                        .with(user(principal(owner)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"version\":0,\"name\":\"Unchanged name\",\"latitude\":52.360000,\"longitude\":4.885200," +
+                                "\"photos\":[{\"url\":\"https://example.com/stale.jpg\",\"position\":0}]}"))
+                .andExpect(status().isConflict());
+
+        Place persisted = placeRepository.findById(place.getId()).orElseThrow();
+        assertThat(persisted.getVersion()).isEqualTo(1L);
+        assertThat(persisted.getName()).isEqualTo("Unchanged name");
+        assertThat(jdbcTemplate.queryForList(
+                "select url from place_photos where place_id = ?", String.class, place.getId()))
+                .containsExactly("https://example.com/first.jpg");
+    }
+
+    @Test
+    void rejectsPlaceUpdateWithoutVersion() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("organizer-missing-version@example.com", Role.ORGANIZER));
+        City city = cityRepository.saveAndFlush(city("Amsterdam Missing Version"));
+        Place place = placeRepository.saveAndFlush(place(city, owner, "Current name", PlaceStatus.DRAFT));
+
+        mockMvc.perform(put("/api/places/{id}", place.getId())
+                        .with(user(principal(owner)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Update without version\",\"latitude\":52.370000,\"longitude\":4.900000}"))
+                .andExpect(status().isBadRequest());
+
+        assertThat(placeRepository.findById(place.getId()).orElseThrow().getName()).isEqualTo("Current name");
     }
 
     @Test
@@ -114,7 +178,7 @@ class PlaceControllerTest {
         mockMvc.perform(put("/api/places/{id}", place.getId())
                         .with(user(principal(anotherOrganizer)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\":\"New name\",\"latitude\":52.370000,\"longitude\":4.900000}"))
+                        .content("{\"version\":0,\"name\":\"New name\",\"latitude\":52.370000,\"longitude\":4.900000}"))
                 .andExpect(status().isForbidden());
     }
 
@@ -128,7 +192,7 @@ class PlaceControllerTest {
         mockMvc.perform(put("/api/places/{id}", place.getId())
                         .with(user(principal(admin)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\":\"Admin update\",\"latitude\":52.370000,\"longitude\":4.900000}"))
+                        .content("{\"version\":0,\"name\":\"Admin update\",\"latitude\":52.370000,\"longitude\":4.900000}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("Admin update"));
     }
@@ -163,7 +227,7 @@ class PlaceControllerTest {
         mockMvc.perform(put("/api/places/{id}", place.getId())
                         .with(user(principal(owner)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\":\"Attempted update\",\"latitude\":52.370000,\"longitude\":4.900000}"))
+                        .content("{\"version\":0,\"name\":\"Attempted update\",\"latitude\":52.370000,\"longitude\":4.900000}"))
                 .andExpect(status().isNotFound());
 
         Place unchangedPlace = placeRepository.findById(place.getId()).orElseThrow();
@@ -240,7 +304,7 @@ class PlaceControllerTest {
         mockMvc.perform(put("/api/places/{id}", place.getId())
                         .with(user(principalWithDifferentEmail))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\":\"Updated by id\",\"latitude\":52.370000,\"longitude\":4.900000}"))
+                        .content("{\"version\":0,\"name\":\"Updated by id\",\"latitude\":52.370000,\"longitude\":4.900000}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("Updated by id"));
     }

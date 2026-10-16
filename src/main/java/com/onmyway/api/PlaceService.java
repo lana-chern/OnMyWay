@@ -4,10 +4,13 @@ import com.onmyway.api.dto.CreatePlaceRequest;
 import com.onmyway.api.dto.PlaceResponse;
 import com.onmyway.api.dto.UpdatePlaceRequest;
 import com.onmyway.api.exception.ResourceNotFoundException;
+import com.onmyway.api.exception.StalePlaceVersionException;
 import com.onmyway.data.entities.*;
 import com.onmyway.data.repositories.CityRepository;
 import com.onmyway.data.repositories.PlaceRepository;
 import com.onmyway.data.repositories.UserRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,11 +25,14 @@ public class PlaceService {
     private static final int MAX_REJECTION_REASON_LENGTH = 1000;
 
     private final PlaceRepository placeRepository;
+    private final EntityManager entityManager;
     private final CityRepository cityRepository;
     private final UserRepository userRepository;
 
-    public PlaceService(PlaceRepository placeRepository, CityRepository cityRepository, UserRepository userRepository) {
+    public PlaceService(PlaceRepository placeRepository, CityRepository cityRepository, UserRepository userRepository,
+                        EntityManager entityManager) {
         this.placeRepository = placeRepository;
+        this.entityManager = entityManager;
         this.cityRepository = cityRepository;
         this.userRepository = userRepository;
     }
@@ -79,9 +85,28 @@ public class PlaceService {
         if (place.getStatus() == PlaceStatus.ARCHIVED) {
             throw new ResourceNotFoundException("Place %d not found".formatted(id));
         }
+        if (request.version() == null) {
+            throw new IllegalArgumentException("version is required");
+        }
+        if (!Objects.equals(request.version(), place.getVersion())) {
+            throw new StalePlaceVersionException(request.version(), place.getVersion());
+        }
 
+        // Inverse child-collection changes do not necessarily dirty the Place row.
+        // Force the version only when scalar fields are unchanged; otherwise the normal
+        // entity UPDATE advances it and an extra force-increment would be redundant.
+        boolean scalarFieldsUnchanged = Objects.equals(place.getName(), request.name())
+                && Objects.equals(place.getDescription(), request.description())
+                && place.getLatitude().compareTo(request.latitude()) == 0
+                && place.getLongitude().compareTo(request.longitude()) == 0;
+        if (scalarFieldsUnchanged) {
+            entityManager.lock(place, LockModeType.OPTIMISTIC_FORCE_INCREMENT);
+        }
         apply(place, request.name(), request.description(), request.latitude(), request.longitude(), request.photos(), request.contacts(), request.openingHours());
-        return PlaceResponse.from(place);
+        placeRepository.flush();
+        return scalarFieldsUnchanged
+                ? PlaceResponse.from(place, place.getVersion() + 1)
+                : PlaceResponse.from(place);
     }
 
     public void delete(Long id, Long actorId, boolean admin) {
@@ -99,6 +124,7 @@ public class PlaceService {
         }
         place.setRejectionReason(null);
         place.setStatus(PlaceStatus.PENDING_MODERATION);
+        placeRepository.flush();
         return PlaceResponse.from(place);
     }
 
@@ -133,6 +159,7 @@ public class PlaceService {
         }
         place.setRejectionReason(rejectionReason);
         place.setStatus(targetStatus);
+        placeRepository.flush();
         return PlaceResponse.from(place);
     }
 
