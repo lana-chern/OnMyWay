@@ -4,6 +4,7 @@ import com.onmyway.api.dto.CreatePlaceRequest;
 import com.onmyway.api.dto.PlaceResponse;
 import com.onmyway.api.dto.UpdatePlaceRequest;
 import com.onmyway.api.exception.ResourceNotFoundException;
+import com.onmyway.api.exception.StalePlaceVersionException;
 import com.onmyway.data.entities.*;
 import com.onmyway.data.repositories.CityRepository;
 import com.onmyway.data.repositories.PlaceRepository;
@@ -78,6 +79,12 @@ public class PlaceService {
         assertCanManage(place, actorId, canManageAnyPlace);
         if (place.getStatus() == PlaceStatus.ARCHIVED) {
             throw new ResourceNotFoundException("Place %d not found".formatted(id));
+        }
+        if (request.version() == null) {
+            throw new IllegalArgumentException("version is required");
+        }
+        if (!Objects.equals(request.version(), place.getVersion())) {
+            throw new StalePlaceVersionException(request.version(), place.getVersion());
         }
 
         apply(place, request.name(), request.description(), request.latitude(), request.longitude(), request.photos(), request.contacts(), request.openingHours());
