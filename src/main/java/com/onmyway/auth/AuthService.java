@@ -35,7 +35,7 @@ public class AuthService {
     }
 
     public CurrentUserResponse register(RegisterRequest request) {
-        validateRegisterRequest(request);
+        Role role = validateRegisterRequest(request);
         String email = request.email().trim().toLowerCase(Locale.ROOT);
         if (userRepository.existsByEmailIgnoreCase(email)) {
             throw new IllegalArgumentException("Email is already registered");
@@ -45,7 +45,7 @@ public class AuthService {
         user.setEmail(email);
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         user.setDisplayName(request.displayName().trim());
-        user.getRoles().add(registrationRole(request.accountType()));
+        user.getRoles().add(role);
         user = userRepository.save(user);
         return toResponse(user);
     }
@@ -80,7 +80,7 @@ public class AuthService {
         return toResponse(user);
     }
 
-    private void validateRegisterRequest(RegisterRequest request) {
+    private Role validateRegisterRequest(RegisterRequest request) {
         if (request == null) {
             throw new IllegalArgumentException("Registration request is required");
         }
@@ -93,7 +93,7 @@ public class AuthService {
         if (request.displayName() == null || request.displayName().isBlank() || request.displayName().length() > 100) {
             throw new IllegalArgumentException("Display name is required and must be at most 100 characters");
         }
-        registrationRole(request.accountType());
+        return registrationRole(request.accountType());
     }
 
     private Role registrationRole(String accountType) {
