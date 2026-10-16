@@ -9,6 +9,8 @@ import com.onmyway.data.entities.*;
 import com.onmyway.data.repositories.CityRepository;
 import com.onmyway.data.repositories.PlaceRepository;
 import com.onmyway.data.repositories.UserRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,11 +25,14 @@ public class PlaceService {
     private static final int MAX_REJECTION_REASON_LENGTH = 1000;
 
     private final PlaceRepository placeRepository;
+    private final EntityManager entityManager;
     private final CityRepository cityRepository;
     private final UserRepository userRepository;
 
-    public PlaceService(PlaceRepository placeRepository, CityRepository cityRepository, UserRepository userRepository) {
+    public PlaceService(PlaceRepository placeRepository, CityRepository cityRepository, UserRepository userRepository,
+                        EntityManager entityManager) {
         this.placeRepository = placeRepository;
+        this.entityManager = entityManager;
         this.cityRepository = cityRepository;
         this.userRepository = userRepository;
     }
@@ -87,6 +92,8 @@ public class PlaceService {
             throw new StalePlaceVersionException(request.version(), place.getVersion());
         }
 
+        // A Place version must also advance when only inverse child collections change.
+        entityManager.lock(place, LockModeType.OPTIMISTIC_FORCE_INCREMENT);
         apply(place, request.name(), request.description(), request.latitude(), request.longitude(), request.photos(), request.contacts(), request.openingHours());
         placeRepository.flush();
         return PlaceResponse.from(place);
