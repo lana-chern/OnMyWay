@@ -67,6 +67,102 @@ class AuthControllerTest {
     }
 
     @Test
+    void registersOrganizerAndReturnsOrganizerRole() throws Exception {
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "organizer@example.com",
+                                  "password": "password123",
+                                  "displayName": "Organizer",
+                                  "accountType": "ORGANIZER"
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.roles", hasItem(Role.ORGANIZER.name())));
+
+        User savedUser = userRepository.findByEmailIgnoreCase("organizer@example.com").orElseThrow();
+        assertThat(savedUser.getRoles()).contains(Role.ORGANIZER);
+        assertThat(savedUser.getRoles()).doesNotContain(Role.ADMIN, Role.MODERATOR);
+    }
+
+    @Test
+    void registersOrganizerWhenAccountTypeIsLowercase() throws Exception {
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "lowercase-organizer@example.com",
+                                  "password": "password123",
+                                  "displayName": "Lowercase Organizer",
+                                  "accountType": "organizer"
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.roles", hasItem(Role.ORGANIZER.name())));
+
+        User savedUser = userRepository.findByEmailIgnoreCase("lowercase-organizer@example.com").orElseThrow();
+        assertThat(savedUser.getRoles()).contains(Role.ORGANIZER);
+        assertThat(savedUser.getRoles()).doesNotContain(Role.ADMIN, Role.MODERATOR);
+    }
+
+    @Test
+    void registersUserWhenAccountTypeIsBlank() throws Exception {
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "blank-account-type@example.com",
+                                  "password": "password123",
+                                  "displayName": "Default User",
+                                  "accountType": ""
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.roles", hasItem(Role.USER.name())));
+
+        User savedUser = userRepository.findByEmailIgnoreCase("blank-account-type@example.com").orElseThrow();
+        assertThat(savedUser.getRoles()).contains(Role.USER);
+        assertThat(savedUser.getRoles()).doesNotContain(Role.ORGANIZER, Role.ADMIN, Role.MODERATOR);
+    }
+
+    @Test
+    void rejectsPrivilegedRoleDuringPublicRegistration() throws Exception {
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "admin@example.com",
+                                  "password": "password123",
+                                  "displayName": "Admin",
+                                  "accountType": "ADMIN"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("Account type must be USER or ORGANIZER"));
+
+        assertThat(userRepository.findByEmailIgnoreCase("admin@example.com")).isEmpty();
+    }
+
+    @Test
+    void rejectsModeratorRoleDuringPublicRegistration() throws Exception {
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "moderator@example.com",
+                                  "password": "password123",
+                                  "displayName": "Moderator",
+                                  "accountType": "MODERATOR"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("Account type must be USER or ORGANIZER"));
+
+        assertThat(userRepository.findByEmailIgnoreCase("moderator@example.com")).isEmpty();
+    }
+
+    @Test
     void logsInWithValidCredentialsAndReturnsJwt() throws Exception {
         registerUser("test@example.com", "password123", "Alice");
 
