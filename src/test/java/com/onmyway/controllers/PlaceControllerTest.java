@@ -123,6 +123,34 @@ class PlaceControllerTest {
     }
 
     @Test
+    void collectionOnlyUpdateIncrementsVersionAndRejectsStaleCollectionUpdate() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("organizer-collection-version@example.com", Role.ORGANIZER));
+        City city = cityRepository.saveAndFlush(city("Amsterdam Collection Version"));
+        Place place = placeRepository.saveAndFlush(place(city, owner, "Unchanged name", PlaceStatus.DRAFT));
+
+        mockMvc.perform(put("/api/places/{id}", place.getId())
+                        .with(user(principal(owner)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\\"version\\":0,\\"name\\":\\"Unchanged name\\",\\"latitude\\":52.360000,\\"longitude\\":4.885200," +
+                                "\\"photos\\":[{\\"url\\":\\"https://example.com/first.jpg\\",\\"position\\":0}]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.version").value(1));
+
+        mockMvc.perform(put("/api/places/{id}", place.getId())
+                        .with(user(principal(owner)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\\"version\\":0,\\"name\\":\\"Unchanged name\\",\\"latitude\\":52.360000,\\"longitude\\":4.885200," +
+                                "\\"photos\\":[{\\"url\\":\\"https://example.com/stale.jpg\\",\\"position\\":0}]}"))
+                .andExpect(status().isConflict());
+
+        Place persisted = placeRepository.findById(place.getId()).orElseThrow();
+        assertThat(persisted.getVersion()).isEqualTo(1L);
+        assertThat(persisted.getName()).isEqualTo("Unchanged name");
+        assertThat(persisted.getPhotos()).extracting("url")
+                .containsExactly("https://example.com/first.jpg");
+    }
+
+    @Test
     void rejectsPlaceUpdateWithoutVersion() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("organizer-missing-version@example.com", Role.ORGANIZER));
         City city = cityRepository.saveAndFlush(city("Amsterdam Missing Version"));
