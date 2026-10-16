@@ -81,6 +81,7 @@ public class PlaceService {
         }
 
         apply(place, request.name(), request.description(), request.latitude(), request.longitude(), request.photos(), request.contacts(), request.openingHours());
+        placeRepository.flush();
         return PlaceResponse.from(place);
     }
 
@@ -99,6 +100,7 @@ public class PlaceService {
         }
         place.setRejectionReason(null);
         place.setStatus(PlaceStatus.PENDING_MODERATION);
+        placeRepository.flush();
         return PlaceResponse.from(place);
     }
 
@@ -133,6 +135,7 @@ public class PlaceService {
         }
         place.setRejectionReason(rejectionReason);
         place.setStatus(targetStatus);
+        placeRepository.flush();
         return PlaceResponse.from(place);
     }
 
