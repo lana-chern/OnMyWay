@@ -104,7 +104,9 @@ public class PlaceService {
         }
         apply(place, request.name(), request.description(), request.latitude(), request.longitude(), request.photos(), request.contacts(), request.openingHours());
         placeRepository.flush();
-        return PlaceResponse.from(place);
+        return scalarFieldsUnchanged
+                ? PlaceResponse.from(place, place.getVersion() + 1)
+                : PlaceResponse.from(place);
     }
 
     public void delete(Long id, Long actorId, boolean admin) {
