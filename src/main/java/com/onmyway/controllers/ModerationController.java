@@ -4,6 +4,7 @@ import com.onmyway.api.PlaceService;
 import com.onmyway.auth.OnMyWayUserDetails;
 import com.onmyway.api.dto.PlaceResponse;
 import com.onmyway.api.dto.RejectPlaceRequest;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -11,6 +12,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/moderation/places")
+@SecurityRequirement(name = "bearerAuth")
 public class ModerationController {
     private final PlaceService placeService;
 
