@@ -11,6 +11,8 @@ import com.onmyway.data.repositories.PlaceRepository;
 import com.onmyway.data.repositories.UserRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +25,7 @@ import java.util.Objects;
 @Transactional
 public class PlaceService {
     private static final int MAX_REJECTION_REASON_LENGTH = 1000;
+    private static final int MAX_PAGE_SIZE = 100;
 
     private final PlaceRepository placeRepository;
     private final EntityManager entityManager;
@@ -38,16 +41,22 @@ public class PlaceService {
     }
 
     @Transactional(readOnly = true)
-    public List<PlaceResponse> findPublished(Long cityId, String query) {
+    public Page<PlaceResponse> findPublished(Long cityId, String query, int page, int size) {
         if (cityId == null) {
             throw new IllegalArgumentException("cityId is required");
+        }
+        if (page < 0) {
+            throw new IllegalArgumentException("page must be zero or greater");
+        }
+        if (size < 1 || size > MAX_PAGE_SIZE) {
+            throw new IllegalArgumentException("size must be between 1 and %d".formatted(MAX_PAGE_SIZE));
         }
         if (!cityRepository.existsById(cityId)) {
             throw new ResourceNotFoundException("City %d not found".formatted(cityId));
         }
         String normalizedQuery = query == null || query.isBlank() ? null : escapeLikeWildcards(query.strip());
-        return placeRepository.searchPublished(cityId, PlaceStatus.PUBLISHED, normalizedQuery)
-                .stream().map(PlaceResponse::from).toList();
+        return placeRepository.searchPublished(cityId, PlaceStatus.PUBLISHED, normalizedQuery, PageRequest.of(page, size))
+                .map(PlaceResponse::from);
     }
 
     private String escapeLikeWildcards(String query) {
