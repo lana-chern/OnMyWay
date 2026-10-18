@@ -6,6 +6,7 @@ import com.onmyway.api.dto.CreatePlaceRequest;
 import com.onmyway.api.dto.PlaceResponse;
 import com.onmyway.api.dto.PublishedPlacesPageResponse;
 import com.onmyway.api.dto.UpdatePlaceRequest;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -31,29 +32,34 @@ public class PlaceController {
     public PlaceResponse findById(@PathVariable Long id) { return placeService.findById(id); }
 
     @GetMapping("/{id}/manage")
+    @SecurityRequirement(name = "bearerAuth")
     public PlaceResponse findForManagement(@PathVariable Long id,
                                            @AuthenticationPrincipal OnMyWayUserDetails principal) {
         return placeService.findForManagement(id, principal.getId(), canManageAnyPlace(principal));
     }
 
     @PostMapping
+    @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<PlaceResponse> create(@RequestBody CreatePlaceRequest request, @AuthenticationPrincipal OnMyWayUserDetails principal) {
         PlaceResponse response = placeService.create(request, principal.getId());
         return ResponseEntity.created(URI.create("/api/places/" + response.id())).body(response);
     }
 
     @PutMapping("/{id}")
+    @SecurityRequirement(name = "bearerAuth")
     public PlaceResponse update(@PathVariable Long id, @RequestBody UpdatePlaceRequest request, @AuthenticationPrincipal OnMyWayUserDetails principal) {
         return placeService.update(id, request, principal.getId(), canManageAnyPlace(principal));
     }
 
     @DeleteMapping("/{id}")
+    @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<Void> delete(@PathVariable Long id, @AuthenticationPrincipal OnMyWayUserDetails principal) {
         placeService.delete(id, principal.getId(), isAdmin(principal));
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/{id}/submit-for-moderation")
+    @SecurityRequirement(name = "bearerAuth")
     public PlaceResponse submitForModeration(@PathVariable Long id, @AuthenticationPrincipal OnMyWayUserDetails principal) {
         return placeService.submitForModeration(id, principal.getId());
     }
