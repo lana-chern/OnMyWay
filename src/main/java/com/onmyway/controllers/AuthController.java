@@ -5,6 +5,7 @@ import com.onmyway.auth.api.CurrentUserResponse;
 import com.onmyway.auth.api.LoginRequest;
 import com.onmyway.auth.api.LoginResponse;
 import com.onmyway.auth.api.RegisterRequest;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -34,6 +35,7 @@ public class AuthController {
     }
 
     @GetMapping("/me")
+    @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<CurrentUserResponse> me(Authentication authentication) {
         return ResponseEntity.ok(authService.currentUser(authentication.getName()));
     }
