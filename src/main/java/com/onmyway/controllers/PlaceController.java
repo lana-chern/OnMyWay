@@ -4,13 +4,13 @@ import com.onmyway.api.PlaceService;
 import com.onmyway.auth.OnMyWayUserDetails;
 import com.onmyway.api.dto.CreatePlaceRequest;
 import com.onmyway.api.dto.PlaceResponse;
+import com.onmyway.api.dto.PublishedPlacesPageResponse;
 import com.onmyway.api.dto.UpdatePlaceRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.net.URI;
-import org.springframework.data.domain.Page;
 
 @RestController
 @RequestMapping("/api/places")
@@ -20,11 +20,11 @@ public class PlaceController {
     public PlaceController(PlaceService placeService) { this.placeService = placeService; }
 
     @GetMapping
-    public Page<PlaceResponse> findPublished(@RequestParam Long cityId,
+    public PublishedPlacesPageResponse findPublished(@RequestParam Long cityId,
                                               @RequestParam(required = false) String q,
                                               @RequestParam(defaultValue = "0") int page,
                                               @RequestParam(defaultValue = "20") int size) {
-        return placeService.findPublished(cityId, q, page, size);
+        return PublishedPlacesPageResponse.from(placeService.findPublished(cityId, q, page, size));
     }
 
     @GetMapping("/{id}")
