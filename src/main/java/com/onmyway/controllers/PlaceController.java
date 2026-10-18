@@ -20,7 +20,10 @@ public class PlaceController {
     public PlaceController(PlaceService placeService) { this.placeService = placeService; }
 
     @GetMapping
-    public List<PlaceResponse> findPublished(@RequestParam Long cityId) { return placeService.findPublished(cityId); }
+    public List<PlaceResponse> findPublished(@RequestParam Long cityId,
+                                               @RequestParam(required = false) String q) {
+        return placeService.findPublished(cityId, q);
+    }
 
     @GetMapping("/{id}")
     public PlaceResponse findById(@PathVariable Long id) { return placeService.findById(id); }

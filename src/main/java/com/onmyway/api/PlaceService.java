@@ -38,14 +38,20 @@ public class PlaceService {
     }
 
     @Transactional(readOnly = true)
-    public List<PlaceResponse> findPublished(Long cityId) {
+    public List<PlaceResponse> findPublished(Long cityId, String query) {
         if (cityId == null) {
             throw new IllegalArgumentException("cityId is required");
         }
         if (!cityRepository.existsById(cityId)) {
             throw new ResourceNotFoundException("City %d not found".formatted(cityId));
         }
-        return placeRepository.findByCityIdAndStatus(cityId, PlaceStatus.PUBLISHED).stream().map(PlaceResponse::from).toList();
+        String normalizedQuery = query == null || query.isBlank() ? null : escapeLikeWildcards(query.strip());
+        return placeRepository.searchPublished(cityId, PlaceStatus.PUBLISHED, normalizedQuery)
+                .stream().map(PlaceResponse::from).toList();
+    }
+
+    private String escapeLikeWildcards(String query) {
+        return query.replace("!", "!!").replace("%", "!%").replace("_", "!_");
     }
 
     @Transactional(readOnly = true)

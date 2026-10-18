@@ -322,6 +322,82 @@ class PlaceControllerTest {
                 .andExpect(jsonPath("$[0].name").value("Published"));
     }
 
+    @Test
+    void searchesPublishedPlacesByNameOrDescriptionCaseInsensitivelyWithinCity() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("organizer-search@example.com", Role.ORGANIZER));
+        City city = cityRepository.saveAndFlush(city("Amsterdam Search"));
+        City anotherCity = cityRepository.saveAndFlush(city("Rotterdam Search"));
+
+        placeRepository.saveAndFlush(place(city, owner, "Museumplein", PlaceStatus.PUBLISHED));
+        Place descriptionMatch = place(city, owner, "Rijksmuseum", PlaceStatus.PUBLISHED);
+        descriptionMatch.setDescription("Collection of Dutch paintings");
+        placeRepository.saveAndFlush(descriptionMatch);
+        placeRepository.saveAndFlush(place(city, owner, "Hidden Museum", PlaceStatus.DRAFT));
+        placeRepository.saveAndFlush(place(anotherCity, owner, "Museum in another city", PlaceStatus.PUBLISHED));
+
+        mockMvc.perform(get("/api/places")
+                        .param("cityId", city.getId().toString())
+                        .param("q", "MUSEUM"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(2)))
+                .andExpect(jsonPath("$[0].name").value("Museumplein"))
+                .andExpect(jsonPath("$[1].name").value("Rijksmuseum"));
+
+        mockMvc.perform(get("/api/places")
+                        .param("cityId", city.getId().toString())
+                        .param("q", "PAINTINGS"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(1)))
+                .andExpect(jsonPath("$[0].name").value("Rijksmuseum"));
+    }
+
+    @Test
+    void treatsBlankSearchQueryAsNoFilter() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("organizer-blank-search@example.com", Role.ORGANIZER));
+        City city = cityRepository.saveAndFlush(city("Amsterdam Blank Search"));
+        placeRepository.saveAndFlush(place(city, owner, "Published place", PlaceStatus.PUBLISHED));
+        placeRepository.saveAndFlush(place(city, owner, "Draft place", PlaceStatus.DRAFT));
+
+        mockMvc.perform(get("/api/places")
+                        .param("cityId", city.getId().toString())
+                        .param("q", "   "))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(1)))
+                .andExpect(jsonPath("$[0].name").value("Published place"));
+    }
+
+
+    @Test
+    void treatsLikeWildcardAndEscapeCharactersAsLiteralSearchText() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("organizer-search-wildcards@example.com", Role.ORGANIZER));
+        City city = cityRepository.saveAndFlush(city("Amsterdam Search Wildcards"));
+        placeRepository.saveAndFlush(place(city, owner, "100% Fun", PlaceStatus.PUBLISHED));
+        placeRepository.saveAndFlush(place(city, owner, "A_B Cafe", PlaceStatus.PUBLISHED));
+        placeRepository.saveAndFlush(place(city, owner, "AXB Cafe", PlaceStatus.PUBLISHED));
+        placeRepository.saveAndFlush(place(city, owner, "Bang! Cafe", PlaceStatus.PUBLISHED));
+
+        mockMvc.perform(get("/api/places")
+                        .param("cityId", city.getId().toString())
+                        .param("q", "%"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(1)))
+                .andExpect(jsonPath("$[0].name").value("100% Fun"));
+
+        mockMvc.perform(get("/api/places")
+                        .param("cityId", city.getId().toString())
+                        .param("q", "_"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(1)))
+                .andExpect(jsonPath("$[0].name").value("A_B Cafe"));
+
+        mockMvc.perform(get("/api/places")
+                        .param("cityId", city.getId().toString())
+                        .param("q", "!"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(1)))
+                .andExpect(jsonPath("$[0].name").value("Bang! Cafe"));
+    }
+
     private OnMyWayUserDetails principal(User user) {
         return new OnMyWayUserDetails(
                 user.getId(),
