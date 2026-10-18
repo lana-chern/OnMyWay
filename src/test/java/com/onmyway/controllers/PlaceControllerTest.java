@@ -416,7 +416,7 @@ class PlaceControllerTest {
                 .andExpect(jsonPath("$.content", org.hamcrest.Matchers.hasSize(2)))
                 .andExpect(jsonPath("$.content[0].name").value("Cafe Alpha"))
                 .andExpect(jsonPath("$.content[1].name").value("Cafe Beta"))
-                .andExpect(jsonPath("$.number").value(0))
+                .andExpect(jsonPath("$.page").value(0))
                 .andExpect(jsonPath("$.size").value(2))
                 .andExpect(jsonPath("$.totalElements").value(3))
                 .andExpect(jsonPath("$.totalPages").value(2))
@@ -431,7 +431,20 @@ class PlaceControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content", org.hamcrest.Matchers.hasSize(1)))
                 .andExpect(jsonPath("$.content[0].name").value("Cafe Gamma"))
-                .andExpect(jsonPath("$.number").value(1))
+                .andExpect(jsonPath("$.page").value(1))
+                .andExpect(jsonPath("$.last").value(true));
+
+        mockMvc.perform(get("/api/places")
+                        .param("cityId", city.getId().toString())
+                        .param("q", "cafe")
+                        .param("page", "10")
+                        .param("size", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content", org.hamcrest.Matchers.hasSize(0)))
+                .andExpect(jsonPath("$.page").value(10))
+                .andExpect(jsonPath("$.size").value(2))
+                .andExpect(jsonPath("$.totalElements").value(3))
+                .andExpect(jsonPath("$.totalPages").value(2))
                 .andExpect(jsonPath("$.last").value(true));
     }
 
@@ -448,6 +461,60 @@ class PlaceControllerTest {
                         .param("cityId", city.getId().toString())
                         .param("size", "101"))
                 .andExpect(status().isBadRequest());
+
+        mockMvc.perform(get("/api/places")
+                        .param("cityId", city.getId().toString())
+                        .param("size", "0"))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(get("/api/places")
+                        .param("cityId", city.getId().toString())
+                        .param("size", "-1"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void usesStablePaginationDefaultsAndExplicitResponseContract() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("organizer-pagination-defaults@example.com", Role.ORGANIZER));
+        City city = cityRepository.saveAndFlush(city("Amsterdam Pagination Defaults"));
+        placeRepository.saveAndFlush(place(city, owner, "Published Alpha", PlaceStatus.PUBLISHED));
+        placeRepository.saveAndFlush(place(city, owner, "Published Beta", PlaceStatus.PUBLISHED));
+
+        mockMvc.perform(get("/api/places").param("cityId", city.getId().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content", org.hamcrest.Matchers.hasSize(2)))
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(20))
+                .andExpect(jsonPath("$.totalElements").value(2))
+                .andExpect(jsonPath("$.totalPages").value(1))
+                .andExpect(jsonPath("$.first").value(true))
+                .andExpect(jsonPath("$.last").value(true))
+                .andExpect(jsonPath("$.number").doesNotExist());
+    }
+
+    @Test
+    void ordersPlacesWithSameNameById() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("organizer-pagination-ties@example.com", Role.ORGANIZER));
+        City city = cityRepository.saveAndFlush(city("Amsterdam Pagination Ties"));
+        Place first = placeRepository.saveAndFlush(place(city, owner, "Same name", PlaceStatus.PUBLISHED));
+        Place second = placeRepository.saveAndFlush(place(city, owner, "Same name", PlaceStatus.PUBLISHED));
+
+        mockMvc.perform(get("/api/places")
+                        .param("cityId", city.getId().toString())
+                        .param("size", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content", org.hamcrest.Matchers.hasSize(1)))
+                .andExpect(jsonPath("$.content[0].id").value(first.getId()))
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.totalElements").value(2));
+
+        mockMvc.perform(get("/api/places")
+                        .param("cityId", city.getId().toString())
+                        .param("page", "1")
+                        .param("size", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content", org.hamcrest.Matchers.hasSize(1)))
+                .andExpect(jsonPath("$.content[0].id").value(second.getId()));
     }
 
     private OnMyWayUserDetails principal(User user) {
