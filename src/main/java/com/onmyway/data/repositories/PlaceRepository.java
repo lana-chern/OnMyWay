@@ -14,8 +14,8 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
             where p.city.id = :cityId
               and p.status = :status
               and (:query is null
-                   or lower(p.name) like lower(concat('%', :query, '%'))
-                   or lower(coalesce(p.description, '')) like lower(concat('%', :query, '%')))
+                   or lower(p.name) like lower(concat('%', :query, '%')) escape '!'
+                   or lower(coalesce(p.description, '')) like lower(concat('%', :query, '%')) escape '!')
             order by p.name asc, p.id asc
             """)
     List<Place> searchPublished(@Param("cityId") Long cityId,
