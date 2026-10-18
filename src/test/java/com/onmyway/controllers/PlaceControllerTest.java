@@ -318,7 +318,7 @@ class PlaceControllerTest {
 
         mockMvc.perform(get("/api/places").param("cityId", city.getId().toString()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(1)))
+                .andExpect(jsonPath("$.content", org.hamcrest.Matchers.hasSize(1)))
                 .andExpect(jsonPath("$.content[0].name").value("Published"));
     }
 
@@ -339,16 +339,16 @@ class PlaceControllerTest {
                         .param("cityId", city.getId().toString())
                         .param("q", "MUSEUM"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(2)))
-                .andExpect(jsonPath("$[0].name").value("Museumplein"))
+                .andExpect(jsonPath("$.content", org.hamcrest.Matchers.hasSize(2)))
+                .andExpect(jsonPath("$.content[0].name").value("Museumplein"))
                 .andExpect(jsonPath("$.content[1].name").value("Rijksmuseum"));
 
         mockMvc.perform(get("/api/places")
                         .param("cityId", city.getId().toString())
                         .param("q", "PAINTINGS"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(1)))
-                .andExpect(jsonPath("$[0].name").value("Rijksmuseum"));
+                .andExpect(jsonPath("$.content", org.hamcrest.Matchers.hasSize(1)))
+                .andExpect(jsonPath("$.content[0].name").value("Rijksmuseum"));
     }
 
     @Test
@@ -362,8 +362,8 @@ class PlaceControllerTest {
                         .param("cityId", city.getId().toString())
                         .param("q", "   "))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(1)))
-                .andExpect(jsonPath("$[0].name").value("Published place"));
+                .andExpect(jsonPath("$.content", org.hamcrest.Matchers.hasSize(1)))
+                .andExpect(jsonPath("$.content[0].name").value("Published place"));
     }
 
 
@@ -380,22 +380,22 @@ class PlaceControllerTest {
                         .param("cityId", city.getId().toString())
                         .param("q", "%"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(1)))
-                .andExpect(jsonPath("$[0].name").value("100% Fun"));
+                .andExpect(jsonPath("$.content", org.hamcrest.Matchers.hasSize(1)))
+                .andExpect(jsonPath("$.content[0].name").value("100% Fun"));
 
         mockMvc.perform(get("/api/places")
                         .param("cityId", city.getId().toString())
                         .param("q", "_"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(1)))
-                .andExpect(jsonPath("$[0].name").value("A_B Cafe"));
+                .andExpect(jsonPath("$.content", org.hamcrest.Matchers.hasSize(1)))
+                .andExpect(jsonPath("$.content[0].name").value("A_B Cafe"));
 
         mockMvc.perform(get("/api/places")
                         .param("cityId", city.getId().toString())
                         .param("q", "!"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(1)))
-                .andExpect(jsonPath("$[0].name").value("Bang! Cafe"));
+                .andExpect(jsonPath("$.content", org.hamcrest.Matchers.hasSize(1)))
+                .andExpect(jsonPath("$.content[0].name").value("Bang! Cafe"));
     }
 
     @Test
