@@ -517,6 +517,58 @@ class PlaceControllerTest {
                 .andExpect(jsonPath("$.content[0].id").value(second.getId()));
     }
 
+
+    @Test
+    void acceptsMaximumPageSize() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("organizer-pagination-max-size@example.com", Role.ORGANIZER));
+        City city = cityRepository.saveAndFlush(city("Amsterdam Pagination Max Size"));
+        placeRepository.saveAndFlush(place(city, owner, "Maximum size boundary", PlaceStatus.PUBLISHED));
+
+        mockMvc.perform(get("/api/places")
+                        .param("cityId", city.getId().toString())
+                        .param("size", "100"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content", org.hamcrest.Matchers.hasSize(1)))
+                .andExpect(jsonPath("$.size").value(100))
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.totalPages").value(1))
+                .andExpect(jsonPath("$.first").value(true))
+                .andExpect(jsonPath("$.last").value(true));
+    }
+
+    @Test
+    void returnsConsistentMetadataWhenNoPublishedPlacesMatch() throws Exception {
+        City city = cityRepository.saveAndFlush(city("Amsterdam Empty Pagination"));
+
+        mockMvc.perform(get("/api/places")
+                        .param("cityId", city.getId().toString())
+                        .param("page", "0")
+                        .param("size", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content", org.hamcrest.Matchers.hasSize(0)))
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(10))
+                .andExpect(jsonPath("$.totalElements").value(0))
+                .andExpect(jsonPath("$.totalPages").value(0))
+                .andExpect(jsonPath("$.first").value(true))
+                .andExpect(jsonPath("$.last").value(true));
+    }
+
+    @Test
+    void rejectsNonNumericPaginationParameters() throws Exception {
+        City city = cityRepository.saveAndFlush(city("Amsterdam Invalid Pagination Type"));
+
+        mockMvc.perform(get("/api/places")
+                        .param("cityId", city.getId().toString())
+                        .param("page", "abc"))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(get("/api/places")
+                        .param("cityId", city.getId().toString())
+                        .param("size", "twenty"))
+                .andExpect(status().isBadRequest());
+    }
+
     private OnMyWayUserDetails principal(User user) {
         return new OnMyWayUserDetails(
                 user.getId(),
