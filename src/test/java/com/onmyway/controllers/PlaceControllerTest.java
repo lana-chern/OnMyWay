@@ -366,6 +366,30 @@ class PlaceControllerTest {
                 .andExpect(jsonPath("$[0].name").value("Published place"));
     }
 
+
+    @Test
+    void treatsLikeWildcardCharactersAsLiteralSearchText() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("organizer-search-wildcards@example.com", Role.ORGANIZER));
+        City city = cityRepository.saveAndFlush(city("Amsterdam Search Wildcards"));
+        placeRepository.saveAndFlush(place(city, owner, "100% Fun", PlaceStatus.PUBLISHED));
+        placeRepository.saveAndFlush(place(city, owner, "A_B Cafe", PlaceStatus.PUBLISHED));
+        placeRepository.saveAndFlush(place(city, owner, "AXB Cafe", PlaceStatus.PUBLISHED));
+
+        mockMvc.perform(get("/api/places")
+                        .param("cityId", city.getId().toString())
+                        .param("q", "%"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(1)))
+                .andExpect(jsonPath("$[0].name").value("100% Fun"));
+
+        mockMvc.perform(get("/api/places")
+                        .param("cityId", city.getId().toString())
+                        .param("q", "_"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(1)))
+                .andExpect(jsonPath("$[0].name").value("A_B Cafe"));
+    }
+
     private OnMyWayUserDetails principal(User user) {
         return new OnMyWayUserDetails(
                 user.getId(),
