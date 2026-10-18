@@ -30,14 +30,19 @@ The application is designed to provide:
 - Public place endpoints return only `PUBLISHED` places.
 - Moderators can edit non-archived places but cannot archive them through the place deletion endpoint; organizers can archive their own places, and administrators can archive any place.
 
+## API documentation
+
+Interactive Swagger UI: `http://localhost:8080/swagger-ui.html`  
+OpenAPI specification: `http://localhost:8080/v3/api-docs`
+
+The OpenAPI document is generated from the Spring MVC controllers and includes JWT bearer authentication metadata. Documentation endpoints are public; protected API operations still enforce the existing role-based security rules.
+
 ## Future Development
 
 Planned improvements include:
 
 - moderator permissions for other product areas and a fuller moderation workflow;
 - improved authentication and authorization flows;
-- API documentation with OpenAPI/Swagger;
-- pagination, filtering, and sorting for place searches;
 - refresh tokens and token revocation;
 - deployment configuration and production observability.
 
