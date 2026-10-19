@@ -9,8 +9,7 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Process-local login throttle. For multi-instance deployments, replace this with a
- * shared store (for example Redis) so attempts are counted across all instances.
+ * Process-local login throttle. For multi-instance deployments, use a shared store such as Redis.
  */
 @Component
 public class LoginRateLimiter {
@@ -21,10 +20,9 @@ public class LoginRateLimiter {
 
     private final Map<String, AttemptWindow> attempts = new HashMap<>();
 
-    public synchronized void checkAllowed(String ipAddress, String email) {
+    public synchronized Attempt reserveAttempt(String ipAddress, String email) {
         long now = System.currentTimeMillis();
         removeExpired(now);
-
         String emailKey = emailKey(email);
         String ipKey = ipKey(ipAddress);
         if (isLimited(emailKey, MAX_EMAIL_FAILURES, now)
@@ -32,16 +30,41 @@ public class LoginRateLimiter {
                 || attempts.size() >= MAX_TRACKED_KEYS) {
             throw new TooManyLoginAttemptsException();
         }
+        AttemptWindow emailWindow = getOrCreate(emailKey, now);
+        AttemptWindow ipWindow = getOrCreate(ipKey, now);
+        emailWindow.inFlight++;
+        ipWindow.inFlight++;
+        return new Attempt(emailKey, ipKey, emailWindow.startedAt, ipWindow.startedAt);
     }
 
-    public synchronized void recordFailure(String ipAddress, String email) {
+    public synchronized void recordFailure(Attempt attempt) {
+        finish(attempt, true);
+    }
+
+    public synchronized void recordSuccess(Attempt attempt) {
+        finish(attempt, false);
+    }
+
+    private void finish(Attempt attempt, boolean failed) {
         long now = System.currentTimeMillis();
-        record(emailKey(email), MAX_EMAIL_FAILURES, now);
-        record(ipKey(ipAddress), MAX_IP_FAILURES, now);
+        finishKey(attempt.emailKey, attempt.emailWindowStartedAt, failed, MAX_EMAIL_FAILURES, now);
+        finishKey(attempt.ipKey, attempt.ipWindowStartedAt, failed, MAX_IP_FAILURES, now);
     }
 
-    public synchronized void recordSuccess(String email) {
-        attempts.remove(emailKey(email));
+    private void finishKey(String key, long startedAt, boolean failed, int limit, long now) {
+        AttemptWindow window = attempts.get(key);
+        if (window == null || window.startedAt != startedAt || now - startedAt >= WINDOW_MILLIS) {
+            return;
+        }
+        if (window.inFlight > 0) {
+            window.inFlight--;
+        }
+        if (failed && window.failures < limit) {
+            window.failures++;
+        }
+        if (window.inFlight == 0 && window.failures == 0) {
+            attempts.remove(key);
+        }
     }
 
     private boolean isLimited(String key, int limit, long now) {
@@ -53,16 +76,16 @@ public class LoginRateLimiter {
             attempts.remove(key);
             return false;
         }
-        return window.failures >= limit;
+        return window.failures + window.inFlight >= limit;
     }
 
-    private void record(String key, int limit, long now) {
+    private AttemptWindow getOrCreate(String key, long now) {
         AttemptWindow window = attempts.get(key);
         if (window == null || now - window.startedAt >= WINDOW_MILLIS) {
-            attempts.put(key, new AttemptWindow(now, 1));
-        } else if (window.failures < limit) {
-            window.failures++;
+            window = new AttemptWindow(now);
+            attempts.put(key, window);
         }
+        return window;
     }
 
     private void removeExpired(long now) {
@@ -82,13 +105,27 @@ public class LoginRateLimiter {
         return "ip:" + (ipAddress == null || ipAddress.isBlank() ? "unknown" : ipAddress);
     }
 
+    public static final class Attempt {
+        private final String emailKey;
+        private final String ipKey;
+        private final long emailWindowStartedAt;
+        private final long ipWindowStartedAt;
+
+        private Attempt(String emailKey, String ipKey, long emailWindowStartedAt, long ipWindowStartedAt) {
+            this.emailKey = emailKey;
+            this.ipKey = ipKey;
+            this.emailWindowStartedAt = emailWindowStartedAt;
+            this.ipWindowStartedAt = ipWindowStartedAt;
+        }
+    }
+
     private static final class AttemptWindow {
         private final long startedAt;
         private int failures;
+        private int inFlight;
 
-        private AttemptWindow(long startedAt, int failures) {
+        private AttemptWindow(long startedAt) {
             this.startedAt = startedAt;
-            this.failures = failures;
         }
     }
 }
