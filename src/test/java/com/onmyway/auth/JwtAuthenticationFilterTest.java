@@ -1,5 +1,6 @@
 package com.onmyway.auth;
 
+import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import org.junit.jupiter.api.AfterEach;
@@ -8,8 +9,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -114,8 +115,21 @@ class JwtAuthenticationFilterTest {
         assertThatThrownBy(() -> filter.doFilter(request, response, filterChain))
                 .isInstanceOf(DataAccessResourceFailureException.class);
 
-        assertThat(response.getStatus()).isEqualTo(200);
         verifyNoInteractions(filterChain);
+    }
+
+    @Test
+    void rejectsJwtException() throws ServletException, IOException {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("Authorization", "Bearer invalid-token");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        when(jwtService.extractUserId("invalid-token")).thenThrow(new JwtException("Invalid signature"));
+
+        filter.doFilter(request, response, filterChain);
+
+        assertThat(response.getStatus()).isEqualTo(401);
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+        verifyNoInteractions(userDetailsService, filterChain);
     }
 
     @Test
