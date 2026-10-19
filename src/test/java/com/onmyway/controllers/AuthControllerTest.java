@@ -374,6 +374,16 @@ class AuthControllerTest {
     }
 
     @Test
+    void rejectsRefreshRequestWithoutTokenAsBadRequest() throws Exception {
+        mockMvc.perform(post("/api/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title").value("Invalid request"))
+                .andExpect(jsonPath("$.detail").value("Refresh token is required"));
+    }
+
+    @Test
     void refreshRejectsAndRevokesTokenWhenUserIsBlocked() throws Exception {
         User user = registerUser("blocked-refresh@example.com", "password123", "Blocked User");
         String loginResponse = mockMvc.perform(post("/api/auth/login")
