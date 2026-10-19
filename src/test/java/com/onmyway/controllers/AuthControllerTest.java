@@ -242,8 +242,8 @@ class AuthControllerTest {
                                   "password": "wrong-password"
                                 }
                                 """))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.title").value("Invalid request"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.title").value("Unauthorized"))
                 .andExpect(jsonPath("$.detail").value("Invalid email or password"));
     }
 
@@ -261,8 +261,8 @@ class AuthControllerTest {
                                   "password": "password123"
                                 }
                                 """))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.title").value("Invalid request"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.title").value("Unauthorized"))
                 .andExpect(jsonPath("$.detail").value("User account is not active"));
     }
 
@@ -340,7 +340,7 @@ class AuthControllerTest {
                         .content("""
                                 {"refreshToken":"%s"}
                                 """.formatted(originalRefreshToken)))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -370,7 +370,33 @@ class AuthControllerTest {
                         .content("""
                                 {"refreshToken":"%s"}
                                 """.formatted(refreshToken)))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void refreshRejectsAndRevokesTokenWhenUserIsBlocked() throws Exception {
+        User user = registerUser("blocked-refresh@example.com", "password123", "Blocked User");
+        String loginResponse = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"blocked-refresh@example.com","password":"password123"}
+                                """))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String refreshToken = com.jayway.jsonpath.JsonPath.read(loginResponse, "$.refreshToken");
+
+        user.setStatus(UserStatus.BLOCKED);
+        userRepository.saveAndFlush(user);
+
+        mockMvc.perform(post("/api/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"refreshToken":"%s"}
+                                """.formatted(refreshToken)))
+                .andExpect(status().isUnauthorized());
+
+        assertThat(refreshTokenRepository.findAll()).filteredOn(token -> token.getUser().getId().equals(user.getId()))
+                .allSatisfy(token -> assertThat(token.getRevokedAt()).isNotNull());
     }
 
     private User registerUser(String email, String password, String displayName) throws Exception {
