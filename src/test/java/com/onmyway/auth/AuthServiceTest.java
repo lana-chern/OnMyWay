@@ -211,7 +211,7 @@ class AuthServiceTest {
     void rejectsPasswordLongerThanBcryptLimitDuringRegistration() {
         RegisterRequest request = new RegisterRequest("test@example.com", "p".repeat(73), "Alice");
         assertThatThrownBy(() -> authService.register(request))
-                .isInstanceOf(IllegalArgumentException.class).hasMessage("Password must contain at most 72 characters");
+                .isInstanceOf(IllegalArgumentException.class).hasMessage("Password must not exceed 72 UTF-8 bytes");
         verifyNoInteractions(userRepository, passwordEncoder);
     }
 
@@ -227,7 +227,7 @@ class AuthServiceTest {
     void rejectsPasswordLongerThanBcryptLimitDuringLogin() {
         LoginRequest request = new LoginRequest("test@example.com", "p".repeat(73));
         assertThatThrownBy(() -> authService.login(request))
-                .isInstanceOf(IllegalArgumentException.class).hasMessage("Password must contain at most 72 characters");
+                .isInstanceOf(IllegalArgumentException.class).hasMessage("Password must not exceed 72 UTF-8 bytes");
         verifyNoInteractions(userRepository, authenticationManager);
     }
 
