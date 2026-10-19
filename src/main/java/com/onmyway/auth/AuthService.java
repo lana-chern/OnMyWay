@@ -11,6 +11,7 @@ import com.onmyway.data.repositories.UserRepository;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -50,7 +51,12 @@ public class AuthService {
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         user.setDisplayName(request.displayName().trim());
         user.getRoles().add(role);
-        user = userRepository.save(user);
+        try {
+            user = userRepository.save(user);
+        } catch (DataIntegrityViolationException exception) {
+            // The unique database constraint also protects against concurrent registrations.
+            throw new IllegalArgumentException("Email is already registered", exception);
+        }
         return toResponse(user);
     }
 
@@ -114,7 +120,7 @@ public class AuthService {
             throw new IllegalArgumentException("Password must contain at least 8 characters");
         }
         if (request.password().getBytes(StandardCharsets.UTF_8).length > 72) {
-            throw new IllegalArgumentException("Password must contain at most 72 characters");
+            throw new IllegalArgumentException("Password must not exceed 72 UTF-8 bytes");
         }
         if (request.displayName() == null || request.displayName().trim().isEmpty() || request.displayName().trim().length() > 100) {
             throw new IllegalArgumentException("Display name is required and must be at most 100 characters");
@@ -146,7 +152,7 @@ public class AuthService {
         if (request.password() == null || request.password().isBlank()) {
             throw new IllegalArgumentException("Password is required");
         }
-        if (request.password().length() > 72) {
+        if (request.password().getBytes(StandardCharsets.UTF_8).length > 72) {
             throw new IllegalArgumentException("Password must contain at most 72 characters");
         }
     }
