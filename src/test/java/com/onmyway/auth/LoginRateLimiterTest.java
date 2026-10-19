@@ -12,11 +12,11 @@ class LoginRateLimiterTest {
         LoginRateLimiter limiter = new LoginRateLimiter();
 
         for (int i = 0; i < 5; i++) {
-            limiter.checkAllowed("192.0.2.10", "person@example.com");
-            limiter.recordFailure("192.0.2.10", "person@example.com");
+            LoginRateLimiter.Attempt attempt = limiter.reserveAttempt("192.0.2.10", "person@example.com");
+            limiter.recordFailure(attempt);
         }
 
-        assertThatThrownBy(() -> limiter.checkAllowed("192.0.2.10", "person@example.com"))
+        assertThatThrownBy(() -> limiter.reserveAttempt("192.0.2.10", "person@example.com"))
                 .isInstanceOf(TooManyLoginAttemptsException.class);
     }
 
@@ -26,24 +26,44 @@ class LoginRateLimiterTest {
 
         for (int i = 0; i < 20; i++) {
             String email = "person" + i + "@example.com";
-            limiter.checkAllowed("192.0.2.11", email);
-            limiter.recordFailure("192.0.2.11", email);
+            LoginRateLimiter.Attempt attempt = limiter.reserveAttempt("192.0.2.11", email);
+            limiter.recordFailure(attempt);
         }
 
-        assertThatThrownBy(() -> limiter.checkAllowed("192.0.2.11", "another@example.com"))
+        assertThatThrownBy(() -> limiter.reserveAttempt("192.0.2.11", "another@example.com"))
                 .isInstanceOf(TooManyLoginAttemptsException.class);
     }
 
     @Test
-    void successfulLoginClearsEmailFailuresButNotIpFailures() {
+    void concurrentInFlightAttemptsCannotExceedEmailLimit() {
         LoginRateLimiter limiter = new LoginRateLimiter();
-        for (int i = 0; i < 5; i++) {
-            limiter.recordFailure("192.0.2.12", "person@example.com");
+        for (int i = 0; i < 4; i++) {
+            LoginRateLimiter.Attempt attempt = limiter.reserveAttempt("192.0.2.12", "person@example.com");
+            limiter.recordFailure(attempt);
         }
 
-        limiter.recordSuccess("PERSON@example.com");
+        LoginRateLimiter.Attempt fifth = limiter.reserveAttempt("192.0.2.12", "person@example.com");
+        assertThatThrownBy(() -> limiter.reserveAttempt("192.0.2.12", "person@example.com"))
+                .isInstanceOf(TooManyLoginAttemptsException.class);
 
-        assertThatCode(() -> limiter.checkAllowed("192.0.2.12", "person@example.com"))
-                .doesNotThrowAnyException();
+        limiter.recordSuccess(fifth);
+        assertThatCode(() -> {
+            LoginRateLimiter.Attempt attempt = limiter.reserveAttempt("192.0.2.12", "person@example.com");
+            limiter.recordSuccess(attempt);
+        }).doesNotThrowAnyException();
+    }
+
+    @Test
+    void successfulLoginDoesNotCountAsFailure() {
+        LoginRateLimiter limiter = new LoginRateLimiter();
+        for (int i = 0; i < 5; i++) {
+            LoginRateLimiter.Attempt attempt = limiter.reserveAttempt("192.0.2.13", "person@example.com");
+            limiter.recordSuccess(attempt);
+        }
+
+        assertThatCode(() -> {
+            LoginRateLimiter.Attempt attempt = limiter.reserveAttempt("192.0.2.13", "person@example.com");
+            limiter.recordSuccess(attempt);
+        }).doesNotThrowAnyException();
     }
 }
