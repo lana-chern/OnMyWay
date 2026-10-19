@@ -1,6 +1,8 @@
 package com.onmyway.controllers;
 
 import com.onmyway.auth.AuthService;
+import com.onmyway.auth.InvalidAuthenticationException;
+import com.onmyway.auth.LoginRateLimiter;
 import com.onmyway.auth.api.CurrentUserResponse;
 import com.onmyway.auth.api.LoginRequest;
 import com.onmyway.auth.api.LoginResponse;
@@ -10,6 +12,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -20,9 +23,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/auth")
 public class AuthController {
     private final AuthService authService;
+    private final LoginRateLimiter loginRateLimiter;
 
-    public AuthController(AuthService authService) {
+    public AuthController(AuthService authService, LoginRateLimiter loginRateLimiter) {
         this.authService = authService;
+        this.loginRateLimiter = loginRateLimiter;
     }
 
     @PostMapping("/register")
@@ -31,8 +36,18 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<LoginResponse> login(@RequestBody LoginRequest request) {
-        return ResponseEntity.ok(authService.login(request));
+    public ResponseEntity<LoginResponse> login(@RequestBody LoginRequest request, HttpServletRequest servletRequest) {
+        String email = request == null ? "" : request.email();
+        String ipAddress = servletRequest.getRemoteAddr();
+        loginRateLimiter.checkAllowed(ipAddress, email);
+        try {
+            LoginResponse response = authService.login(request);
+            loginRateLimiter.recordSuccess(email);
+            return ResponseEntity.ok(response);
+        } catch (InvalidAuthenticationException exception) {
+            loginRateLimiter.recordFailure(ipAddress, email);
+            throw exception;
+        }
     }
 
     @PostMapping("/refresh")
