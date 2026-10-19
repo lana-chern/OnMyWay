@@ -60,7 +60,7 @@ public class AuthService {
                 .orElseThrow(() -> new IllegalArgumentException("Invalid email or password"));
 
         if (user.getStatus() != UserStatus.ACTIVE) {
-            throw new IllegalArgumentException("User account is not active");
+            throw new InvalidAuthenticationException("User account is not active");
         }
 
         try {
@@ -68,7 +68,7 @@ public class AuthService {
                     new UsernamePasswordAuthenticationToken(email, request.password())
             );
         } catch (AuthenticationException exception) {
-            throw new IllegalArgumentException("Invalid email or password");
+            throw new InvalidAuthenticationException("Invalid email or password");
         }
 
         return new LoginResponse(
@@ -96,7 +96,7 @@ public class AuthService {
         User user = userRepository.findByEmailIgnoreCase(email)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
         if (user.getStatus() != UserStatus.ACTIVE) {
-            throw new IllegalArgumentException("User account is not active");
+            throw new InvalidAuthenticationException("User account is not active");
         }
         return toResponse(user);
     }
