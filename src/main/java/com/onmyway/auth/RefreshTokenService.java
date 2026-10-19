@@ -54,14 +54,14 @@ public class RefreshTokenService {
 
         Instant now = Instant.now();
         RefreshToken storedToken = refreshTokenRepository.findByTokenHashForUpdate(hash(rawToken))
-                .orElseThrow(() -> new IllegalArgumentException("Invalid refresh token"));
+                .orElseThrow(() -> new InvalidAuthenticationException("Invalid refresh token"));
 
         if (!storedToken.isUsableAt(now)) {
             throw new InvalidAuthenticationException("Invalid refresh token");
         }
 
         User user = userRepository.findById(storedToken.getUser().getId())
-                .orElseThrow(() -> new IllegalArgumentException("Invalid refresh token"));
+                .orElseThrow(() -> new InvalidAuthenticationException("Invalid refresh token"));
         if (user.getStatus() != UserStatus.ACTIVE) {
             storedToken.revoke(now);
             throw new InvalidAuthenticationException("User account is not active");
