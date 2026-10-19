@@ -300,6 +300,74 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.detail").value("Email is required"));
     }
 
+    @Test
+    void refreshRotatesTokenAndRejectsPreviouslyUsedToken() throws Exception {
+        registerUser("refresh@example.com", "password123", "Refresh User");
+
+        String loginResponse = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "refresh@example.com",
+                                  "password": "password123"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.refreshToken").isString())
+                .andReturn().getResponse().getContentAsString();
+        String originalRefreshToken = com.jayway.jsonpath.JsonPath.read(loginResponse, "$.refreshToken");
+
+        String refreshResponse = mockMvc.perform(post("/api/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"refreshToken":"%s"}
+                                """.formatted(originalRefreshToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").isString())
+                .andExpect(jsonPath("$.refreshToken").isString())
+                .andExpect(jsonPath("$.user.email").value("refresh@example.com"))
+                .andReturn().getResponse().getContentAsString();
+        String rotatedRefreshToken = com.jayway.jsonpath.JsonPath.read(refreshResponse, "$.refreshToken");
+        org.assertj.core.api.Assertions.assertThat(rotatedRefreshToken).isNotEqualTo(originalRefreshToken);
+
+        mockMvc.perform(post("/api/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"refreshToken":"%s"}
+                                """.formatted(originalRefreshToken)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void logoutRevokesRefreshToken() throws Exception {
+        registerUser("logout@example.com", "password123", "Logout User");
+        String loginResponse = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "logout@example.com",
+                                  "password": "password123"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String refreshToken = com.jayway.jsonpath.JsonPath.read(loginResponse, "$.refreshToken");
+
+        mockMvc.perform(post("/api/auth/logout")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"refreshToken":"%s"}
+                                """.formatted(refreshToken)))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(post("/api/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"refreshToken":"%s"}
+                                """.formatted(refreshToken)))
+                .andExpect(status().isBadRequest());
+    }
+
     private User registerUser(String email, String password, String displayName) throws Exception {
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
