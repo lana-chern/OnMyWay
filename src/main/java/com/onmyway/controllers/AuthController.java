@@ -47,6 +47,11 @@ public class AuthController {
         } catch (InvalidAuthenticationException exception) {
             loginRateLimiter.recordFailure(attempt);
             throw exception;
+        } catch (RuntimeException exception) {
+            // Validation and infrastructure errors must release the in-flight reservation,
+            // but must not be counted as failed credentials.
+            loginRateLimiter.recordSuccess(attempt);
+            throw exception;
         }
     }
 
