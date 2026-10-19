@@ -1,11 +1,13 @@
 package com.onmyway.auth;
 
+import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -30,7 +32,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     ) throws ServletException, IOException {
         String authorization = request.getHeader("Authorization");
 
-        if (authorization == null || !authorization.startsWith("Bearer ")) {
+        if (authorization == null || authorization.length() < 7
+                || !authorization.regionMatches(true, 0, "Bearer ", 0, 7)) {
             filterChain.doFilter(request, response);
             return;
         }
@@ -41,26 +44,35 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
+        Long userId;
         try {
-            Long userId = jwtService.extractUserId(token);
-            OnMyWayUserDetails userDetails = userDetailsService.loadUserById(userId);
-            if (!userDetails.isEnabled()) {
-                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid bearer token");
-                return;
-            }
-
-            UsernamePasswordAuthenticationToken authentication =
-                    new UsernamePasswordAuthenticationToken(
-                            userDetails,
-                            null,
-                            userDetails.getAuthorities()
-                    );
-            authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-            SecurityContextHolder.getContext().setAuthentication(authentication);
-        } catch (RuntimeException exception) {
+            userId = jwtService.extractUserId(token);
+        } catch (JwtException | IllegalArgumentException exception) {
             response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid bearer token");
             return;
         }
+
+        OnMyWayUserDetails userDetails;
+        try {
+            userDetails = userDetailsService.loadUserById(userId);
+        } catch (UsernameNotFoundException exception) {
+            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid bearer token");
+            return;
+        }
+
+        if (!userDetails.isEnabled()) {
+            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid bearer token");
+            return;
+        }
+
+        UsernamePasswordAuthenticationToken authentication =
+                new UsernamePasswordAuthenticationToken(
+                        userDetails,
+                        null,
+                        userDetails.getAuthorities()
+                );
+        authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+        SecurityContextHolder.getContext().setAuthentication(authentication);
 
         filterChain.doFilter(request, response);
     }
