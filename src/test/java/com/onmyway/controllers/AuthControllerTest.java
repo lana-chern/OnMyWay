@@ -254,6 +254,61 @@ class AuthControllerTest {
     }
 
     @Test
+    void rateLimitsRepeatedLoginAttemptsForUnknownEmail() throws Exception {
+        for (int i = 0; i < 5; i++) {
+            mockMvc.perform(post("/api/auth/login")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {"email":"rate-limit-unknown@example.com","password":"wrong-password"}
+                                    """))
+                    .andExpect(status().isUnauthorized())
+                    .andExpect(jsonPath("$.detail").value("Invalid email or password"));
+        }
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"rate-limit-unknown@example.com","password":"wrong-password"}
+                                """))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.title").value("Too many login attempts"));
+    }
+
+    @Test
+    void concurrentRegistrationWithSameEmailCreatesOnlyOneUser() throws Exception {
+        String body = """
+                {"email":"concurrent-register@example.com","password":"password123","displayName":"Concurrent"}
+                """;
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        try {
+            var request = (java.util.concurrent.Callable<Integer>) () -> {
+                ready.countDown();
+                if (!start.await(5, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("Timed out waiting to start concurrent registration");
+                }
+                return mockMvc.perform(post("/api/auth/register")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(body))
+                        .andReturn().getResponse().getStatus();
+            };
+            Future<Integer> first = executor.submit(request);
+            Future<Integer> second = executor.submit(request);
+            assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            assertThat(java.util.List.of(first.get(10, TimeUnit.SECONDS), second.get(10, TimeUnit.SECONDS)))
+                    .containsExactlyInAnyOrder(201, 400);
+            assertThat(userRepository.findAll().stream()
+                    .filter(user -> user.getEmail().equals("concurrent-register@example.com")))
+                    .hasSize(1);
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
     void rejectsBlockedUserLogin() throws Exception {
         User user = registerUser("test@example.com", "password123", "Alice");
         user.setStatus(UserStatus.BLOCKED);
