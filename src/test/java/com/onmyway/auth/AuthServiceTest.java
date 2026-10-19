@@ -121,9 +121,12 @@ class AuthServiceTest {
         LoginRequest request = new LoginRequest("test@example.com", "password123");
         User user = user("test@example.com", "encoded-password", "Alice", UserStatus.BLOCKED);
         when(userRepository.findByEmailIgnoreCase("test@example.com")).thenReturn(java.util.Optional.of(user));
+        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
+                .thenThrow(mock(AuthenticationException.class));
         assertThatThrownBy(() -> authService.login(request))
-                .isInstanceOf(IllegalArgumentException.class).hasMessage("User account is not active");
-        verifyNoInteractions(authenticationManager, jwtService);
+                .isInstanceOf(InvalidAuthenticationException.class).hasMessage("Invalid email or password");
+        verify(authenticationManager).authenticate(any(UsernamePasswordAuthenticationToken.class));
+        verifyNoInteractions(jwtService);
     }
 
     @Test
@@ -193,6 +196,39 @@ class AuthServiceTest {
         assertThatThrownBy(() -> authService.register(request))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Display name is required and must be at most 100 characters");
+    }
+
+
+    @Test
+    void rejectsInvalidEmailFormatDuringRegistration() {
+        RegisterRequest request = new RegisterRequest("not-an-email", "password123", "Alice");
+        assertThatThrownBy(() -> authService.register(request))
+                .isInstanceOf(IllegalArgumentException.class).hasMessage("Email must be a valid email address");
+        verifyNoInteractions(userRepository, passwordEncoder);
+    }
+
+    @Test
+    void rejectsPasswordLongerThanBcryptLimitDuringRegistration() {
+        RegisterRequest request = new RegisterRequest("test@example.com", "p".repeat(73), "Alice");
+        assertThatThrownBy(() -> authService.register(request))
+                .isInstanceOf(IllegalArgumentException.class).hasMessage("Password must contain at most 72 characters");
+        verifyNoInteractions(userRepository, passwordEncoder);
+    }
+
+    @Test
+    void rejectsInvalidEmailFormatDuringLogin() {
+        LoginRequest request = new LoginRequest("not-an-email", "password123");
+        assertThatThrownBy(() -> authService.login(request))
+                .isInstanceOf(IllegalArgumentException.class).hasMessage("Email must be a valid email address");
+        verifyNoInteractions(userRepository, authenticationManager);
+    }
+
+    @Test
+    void rejectsPasswordLongerThanBcryptLimitDuringLogin() {
+        LoginRequest request = new LoginRequest("test@example.com", "p".repeat(73));
+        assertThatThrownBy(() -> authService.login(request))
+                .isInstanceOf(IllegalArgumentException.class).hasMessage("Password must contain at most 72 characters");
+        verifyNoInteractions(userRepository, authenticationManager);
     }
 
     private User user(String email, String passwordHash, String displayName, UserStatus status) {
