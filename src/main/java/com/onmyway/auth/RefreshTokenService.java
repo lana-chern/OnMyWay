@@ -49,7 +49,7 @@ public class RefreshTokenService {
     @Transactional(noRollbackFor = IllegalArgumentException.class)
     public RefreshGrant rotate(String rawToken) {
         if (rawToken == null || rawToken.isBlank()) {
-            throw new IllegalArgumentException("Invalid refresh token");
+            throw new InvalidAuthenticationException("Invalid refresh token");
         }
 
         Instant now = Instant.now();
@@ -57,14 +57,14 @@ public class RefreshTokenService {
                 .orElseThrow(() -> new IllegalArgumentException("Invalid refresh token"));
 
         if (!storedToken.isUsableAt(now)) {
-            throw new IllegalArgumentException("Invalid refresh token");
+            throw new InvalidAuthenticationException("Invalid refresh token");
         }
 
         User user = userRepository.findById(storedToken.getUser().getId())
                 .orElseThrow(() -> new IllegalArgumentException("Invalid refresh token"));
         if (user.getStatus() != UserStatus.ACTIVE) {
             storedToken.revoke(now);
-            throw new IllegalArgumentException("User account is not active");
+            throw new InvalidAuthenticationException("User account is not active");
         }
 
         storedToken.revoke(now);
