@@ -98,8 +98,9 @@ class JwtAuthenticationFilterTest {
 
         filter.doFilter(request, response, filterChain);
 
-        assertThat(response.getStatus()).isEqualTo(200);
         assertThat(SecurityContextHolder.getContext().getAuthentication()).isNotNull();
+        verify(jwtService).extractUserId("jwt-token");
+        verify(userDetailsService).loadUserById(1842L);
         verify(filterChain).doFilter(request, response);
     }
 
