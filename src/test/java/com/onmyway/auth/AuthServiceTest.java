@@ -32,6 +32,7 @@ class AuthServiceTest {
     @Mock PasswordEncoder passwordEncoder;
     @Mock AuthenticationManager authenticationManager;
     @Mock JwtService jwtService;
+    @Mock RefreshTokenService refreshTokenService;
     @InjectMocks AuthService authService;
 
     @Test
@@ -65,13 +66,16 @@ class AuthServiceTest {
         User user = user("test@example.com", "encoded-password", "Alice", UserStatus.ACTIVE);
         when(userRepository.findByEmailIgnoreCase("test@example.com")).thenReturn(java.util.Optional.of(user));
         when(jwtService.generateToken(1L)).thenReturn("jwt-token");
+        when(refreshTokenService.issue(user)).thenReturn("refresh-token");
         LoginResponse response = authService.login(request);
         assertThat(response.accessToken()).isEqualTo("jwt-token");
+        assertThat(response.refreshToken()).isEqualTo("refresh-token");
         assertThat(response.user().email()).isEqualTo("test@example.com");
         assertThat(response.user().displayName()).isEqualTo("Alice");
         assertThat(response.user().roles()).containsExactly(Role.USER);
         verify(authenticationManager).authenticate(any(UsernamePasswordAuthenticationToken.class));
         verify(jwtService).generateToken(1L);
+        verify(refreshTokenService).issue(user);
     }
 
     @Test
