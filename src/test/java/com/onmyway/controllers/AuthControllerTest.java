@@ -5,6 +5,7 @@ import com.onmyway.data.entities.Role;
 import com.onmyway.data.entities.User;
 import com.onmyway.data.entities.UserStatus;
 import com.onmyway.data.repositories.PlaceRepository;
+import com.onmyway.data.repositories.RefreshTokenRepository;
 import com.onmyway.data.repositories.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -35,11 +36,15 @@ class AuthControllerTest {
     PlaceRepository placeRepository;
 
     @Autowired
+    RefreshTokenRepository refreshTokenRepository;
+
+    @Autowired
     JwtService jwtService;
 
     @BeforeEach
     void cleanUsers() {
         placeRepository.deleteAll();
+        refreshTokenRepository.deleteAll();
         userRepository.deleteAll();
     }
 
