@@ -269,7 +269,7 @@ class AuthControllerTest {
                                 """))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.title").value("Unauthorized"))
-                .andExpect(jsonPath("$.detail").value("User account is not active"));
+                .andExpect(jsonPath("$.detail").value("Invalid email or password"));
     }
 
     @Test
