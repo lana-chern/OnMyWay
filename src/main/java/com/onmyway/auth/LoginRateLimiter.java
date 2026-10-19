@@ -82,11 +82,13 @@ public class LoginRateLimiter {
         return "ip:" + (ipAddress == null || ipAddress.isBlank() ? "unknown" : ipAddress);
     }
 
-    private record AttemptWindow(long startedAt, int failures) {
-        private AttemptWindow {
-            if (failures < 1) {
-                throw new IllegalArgumentException("failures must be positive");
-            }
+    private static final class AttemptWindow {
+        private final long startedAt;
+        private int failures;
+
+        private AttemptWindow(long startedAt, int failures) {
+            this.startedAt = startedAt;
+            this.failures = failures;
         }
     }
 }
