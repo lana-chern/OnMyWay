@@ -23,15 +23,18 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
+    private final RefreshTokenService refreshTokenService;
 
     public AuthService(UserRepository userRepository,
                        PasswordEncoder passwordEncoder,
                        AuthenticationManager authenticationManager,
-                       JwtService jwtService) {
+                       JwtService jwtService,
+                       RefreshTokenService refreshTokenService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.authenticationManager = authenticationManager;
         this.jwtService = jwtService;
+        this.refreshTokenService = refreshTokenService;
     }
 
     public CurrentUserResponse register(RegisterRequest request) {
@@ -68,7 +71,25 @@ public class AuthService {
             throw new IllegalArgumentException("Invalid email or password");
         }
 
-        return new LoginResponse(jwtService.generateToken(user.getId()), toResponse(user));
+        return new LoginResponse(
+                jwtService.generateToken(user.getId()),
+                refreshTokenService.issue(user),
+                toResponse(user)
+        );
+    }
+
+    public LoginResponse refresh(String rawRefreshToken) {
+        RefreshTokenService.RefreshGrant grant = refreshTokenService.rotate(rawRefreshToken);
+        User user = grant.user();
+        return new LoginResponse(
+                jwtService.generateToken(user.getId()),
+                grant.refreshToken(),
+                toResponse(user)
+        );
+    }
+
+    public void logout(String rawRefreshToken) {
+        refreshTokenService.revoke(rawRefreshToken);
     }
 
     public CurrentUserResponse currentUser(String email) {
