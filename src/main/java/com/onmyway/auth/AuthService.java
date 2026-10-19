@@ -14,6 +14,7 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import java.util.Set;
 
@@ -112,7 +113,7 @@ public class AuthService {
         if (request.password() == null || request.password().length() < 8) {
             throw new IllegalArgumentException("Password must contain at least 8 characters");
         }
-        if (request.password().length() > 72) {
+        if (request.password().getBytes(StandardCharsets.UTF_8).length > 72) {
             throw new IllegalArgumentException("Password must contain at most 72 characters");
         }
         if (request.displayName() == null || request.displayName().trim().isEmpty() || request.displayName().trim().length() > 100) {
