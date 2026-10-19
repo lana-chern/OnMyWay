@@ -112,7 +112,7 @@ class AuthServiceTest {
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
                 .thenThrow(mock(AuthenticationException.class));
         assertThatThrownBy(() -> authService.login(request))
-                .isInstanceOf(IllegalArgumentException.class).hasMessage("Invalid email or password");
+                .isInstanceOf(InvalidAuthenticationException.class).hasMessage("Invalid email or password");
         verifyNoInteractions(jwtService);
     }
 
@@ -134,7 +134,7 @@ class AuthServiceTest {
         LoginRequest request = new LoginRequest("unknown@example.com", "password123");
         when(userRepository.findByEmailIgnoreCase("unknown@example.com")).thenReturn(java.util.Optional.empty());
         assertThatThrownBy(() -> authService.login(request))
-                .isInstanceOf(IllegalArgumentException.class).hasMessage("Invalid email or password");
+                .isInstanceOf(InvalidAuthenticationException.class).hasMessage("Invalid email or password");
         verifyNoInteractions(authenticationManager, jwtService);
     }
 
