@@ -29,9 +29,24 @@ class OpenApiControllerTest {
                 .andExpect(jsonPath("$.components.securitySchemes.bearerAuth.type").value("http"))
                 .andExpect(jsonPath("$.components.securitySchemes.bearerAuth.scheme").value("bearer"))
                 .andExpect(jsonPath("$.paths['/api/places'].get.security").doesNotExist())
+                .andExpect(jsonPath("$.paths['/api/cities'].get.security").doesNotExist())
+                .andExpect(jsonPath("$.paths['/api/places/{id}'].get.security").doesNotExist())
                 .andExpect(jsonPath("$.paths['/api/places'].post.security[0].bearerAuth").exists())
+                .andExpect(jsonPath("$.paths['/api/places/{id}/manage'].get.security[0].bearerAuth").exists())
+                .andExpect(jsonPath("$.paths['/api/places/{id}'].put.security[0].bearerAuth").exists())
+                .andExpect(jsonPath("$.paths['/api/places/{id}'].delete.security[0].bearerAuth").exists())
+                .andExpect(jsonPath("$.paths['/api/places/{id}/submit-for-moderation'].post.security[0].bearerAuth").exists())
                 .andExpect(jsonPath("$.paths['/api/auth/me'].get.security[0].bearerAuth").exists())
-                .andExpect(jsonPath("$.paths['/api/moderation/places/pending'].get.security[0].bearerAuth").exists());
+                .andExpect(jsonPath("$.paths['/api/moderation/places/pending'].get.security[0].bearerAuth").exists())
+                .andExpect(jsonPath("$.paths['/api/moderation/places/{id}/publish'].post.security[0].bearerAuth").exists())
+                .andExpect(jsonPath("$.paths['/api/moderation/places/{id}/reject'].post.security[0].bearerAuth").exists())
+                .andExpect(jsonPath("$.paths['/api/places'].get.parameters[0].name").value("cityId"))
+                .andExpect(jsonPath("$.paths['/api/places'].get.parameters[0].description").value("ID of the city whose published places should be returned."))
+                .andExpect(jsonPath("$.paths['/api/places'].get.parameters[1].description").value("Optional case-insensitive search text matched against place names."))
+                .andExpect(jsonPath("$.paths['/api/places/{id}'].put.parameters[0].description").value("Unique ID of the place to update."))
+                .andExpect(jsonPath("$.components.schemas.CreatePlaceRequest.properties.cityId.description").value("ID of the city where the place is located."))
+                .andExpect(jsonPath("$.components.schemas.UpdatePlaceRequest.properties.version.description").value("Current version of the place. Must match the version last read by the client."))
+                .andExpect(jsonPath("$.components.schemas.RejectPlaceRequest.properties.reason.description").value("Explanation of why the submission was rejected."));
     }
 
     @Test
