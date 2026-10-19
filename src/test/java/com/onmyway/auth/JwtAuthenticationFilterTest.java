@@ -9,6 +9,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -18,6 +19,7 @@ import java.io.IOException;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -82,6 +84,38 @@ class JwtAuthenticationFilterTest {
         verify(jwtService).extractUserId("jwt-token");
         verify(userDetailsService).loadUserById(1842L);
         verify(filterChain).doFilter(request, response);
+    }
+
+    @Test
+    void acceptsBearerSchemeCaseInsensitively() throws ServletException, IOException {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("Authorization", "bearer jwt-token");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        OnMyWayUserDetails userDetails = userDetails(true);
+        when(jwtService.extractUserId("jwt-token")).thenReturn(1842L);
+        when(userDetailsService.loadUserById(1842L)).thenReturn(userDetails);
+
+        filter.doFilter(request, response, filterChain);
+
+        assertThat(response.getStatus()).isEqualTo(200);
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNotNull();
+        verify(filterChain).doFilter(request, response);
+    }
+
+    @Test
+    void propagatesUnexpectedUserLookupFailure() throws ServletException, IOException {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("Authorization", "Bearer jwt-token");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        when(jwtService.extractUserId("jwt-token")).thenReturn(1842L);
+        when(userDetailsService.loadUserById(1842L))
+                .thenThrow(new DataAccessResourceFailureException("Database unavailable"));
+
+        assertThatThrownBy(() -> filter.doFilter(request, response, filterChain))
+                .isInstanceOf(DataAccessResourceFailureException.class);
+
+        assertThat(response.getStatus()).isEqualTo(200);
+        verifyNoInteractions(filterChain);
     }
 
     @Test
