@@ -39,13 +39,13 @@ public class AuthController {
     public ResponseEntity<LoginResponse> login(@RequestBody LoginRequest request, HttpServletRequest servletRequest) {
         String email = request == null ? "" : request.email();
         String ipAddress = servletRequest.getRemoteAddr();
-        loginRateLimiter.checkAllowed(ipAddress, email);
+        LoginRateLimiter.Attempt attempt = loginRateLimiter.reserveAttempt(ipAddress, email);
         try {
             LoginResponse response = authService.login(request);
-            loginRateLimiter.recordSuccess(email);
+            loginRateLimiter.recordSuccess(attempt);
             return ResponseEntity.ok(response);
         } catch (InvalidAuthenticationException exception) {
-            loginRateLimiter.recordFailure(ipAddress, email);
+            loginRateLimiter.recordFailure(attempt);
             throw exception;
         }
     }
