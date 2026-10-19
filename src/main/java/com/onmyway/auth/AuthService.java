@@ -59,15 +59,12 @@ public class AuthService {
         User user = userRepository.findByEmailIgnoreCase(email)
                 .orElseThrow(() -> new InvalidAuthenticationException("Invalid email or password"));
 
-        if (user.getStatus() != UserStatus.ACTIVE) {
-            throw new InvalidAuthenticationException("User account is not active");
-        }
-
         try {
             authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(email, request.password())
             );
         } catch (AuthenticationException exception) {
+            // Keep the response identical for unknown emails, bad passwords and disabled accounts.
             throw new InvalidAuthenticationException("Invalid email or password");
         }
 
@@ -108,10 +105,17 @@ public class AuthService {
         if (request.email() == null || request.email().isBlank()) {
             throw new IllegalArgumentException("Email is required");
         }
+        String normalizedEmail = request.email().trim();
+        if (normalizedEmail.length() > 320 || !normalizedEmail.matches("(?i)^[A-Z0-9.!#$%&'*+/=?^_\u0060{|}~-]+@[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?(?:\\.[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?)+$")) {
+            throw new IllegalArgumentException("Email must be a valid email address");
+        }
         if (request.password() == null || request.password().length() < 8) {
             throw new IllegalArgumentException("Password must contain at least 8 characters");
         }
-        if (request.displayName() == null || request.displayName().isBlank() || request.displayName().length() > 100) {
+        if (request.password().length() > 72) {
+            throw new IllegalArgumentException("Password must contain at most 72 characters");
+        }
+        if (request.displayName() == null || request.displayName().trim().isEmpty() || request.displayName().trim().length() > 100) {
             throw new IllegalArgumentException("Display name is required and must be at most 100 characters");
         }
         return registrationRole(request.accountType());
@@ -134,8 +138,15 @@ public class AuthService {
         if (request.email() == null || request.email().isBlank()) {
             throw new IllegalArgumentException("Email is required");
         }
+        String normalizedEmail = request.email().trim();
+        if (normalizedEmail.length() > 320 || !normalizedEmail.matches("(?i)^[A-Z0-9.!#$%&'*+/=?^_\u0060{|}~-]+@[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?(?:\\.[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?)+$")) {
+            throw new IllegalArgumentException("Email must be a valid email address");
+        }
         if (request.password() == null || request.password().isBlank()) {
             throw new IllegalArgumentException("Password is required");
+        }
+        if (request.password().length() > 72) {
+            throw new IllegalArgumentException("Password must contain at most 72 characters");
         }
     }
 
