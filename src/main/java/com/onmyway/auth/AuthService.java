@@ -153,7 +153,7 @@ public class AuthService {
             throw new IllegalArgumentException("Password is required");
         }
         if (request.password().getBytes(StandardCharsets.UTF_8).length > 72) {
-            throw new IllegalArgumentException("Password must contain at most 72 characters");
+            throw new IllegalArgumentException("Password must not exceed 72 UTF-8 bytes");
         }
     }
 
