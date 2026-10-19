@@ -37,7 +37,10 @@ public class AuthController {
 
     @PostMapping("/refresh")
     public ResponseEntity<LoginResponse> refresh(@RequestBody RefreshTokenRequest request) {
-        return ResponseEntity.ok(authService.refresh(request == null ? null : request.refreshToken()));
+        if (request == null || request.refreshToken() == null || request.refreshToken().isBlank()) {
+            throw new IllegalArgumentException("Refresh token is required");
+        }
+        return ResponseEntity.ok(authService.refresh(request.refreshToken()));
     }
 
     @PostMapping("/logout")
