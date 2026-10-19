@@ -22,6 +22,12 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+
 @SpringBootTest
 @AutoConfigureMockMvc
 @TestPropertySource(properties = "omw.jwt.secret=MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=")
@@ -371,6 +377,47 @@ class AuthControllerTest {
                                 {"refreshToken":"%s"}
                                 """.formatted(refreshToken)))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void onlyOneConcurrentRefreshRequestCanRotateTheSameToken() throws Exception {
+        registerUser("concurrent-refresh@example.com", "password123", "Concurrent Refresh");
+        String loginResponse = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"concurrent-refresh@example.com","password":"password123"}
+                                """))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String refreshToken = com.jayway.jsonpath.JsonPath.read(loginResponse, "$.refreshToken");
+        String body = """
+                {"refreshToken":"%s"}
+                """.formatted(refreshToken);
+
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        try {
+            var request = (java.util.concurrent.Callable<Integer>) () -> {
+                ready.countDown();
+                if (!start.await(5, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("Timed out waiting to start concurrent refresh");
+                }
+                return mockMvc.perform(post("/api/auth/refresh")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(body))
+                        .andReturn().getResponse().getStatus();
+            };
+            Future<Integer> first = executor.submit(request);
+            Future<Integer> second = executor.submit(request);
+            assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            assertThat(java.util.List.of(first.get(10, TimeUnit.SECONDS), second.get(10, TimeUnit.SECONDS)))
+                    .containsExactlyInAnyOrder(200, 401);
+        } finally {
+            executor.shutdownNow();
+        }
     }
 
     @Test
