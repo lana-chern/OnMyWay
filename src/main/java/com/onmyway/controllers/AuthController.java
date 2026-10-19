@@ -4,6 +4,7 @@ import com.onmyway.auth.AuthService;
 import com.onmyway.auth.api.CurrentUserResponse;
 import com.onmyway.auth.api.LoginRequest;
 import com.onmyway.auth.api.LoginResponse;
+import com.onmyway.auth.api.RefreshTokenRequest;
 import com.onmyway.auth.api.RegisterRequest;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import org.springframework.http.HttpStatus;
@@ -32,6 +33,17 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(@RequestBody LoginRequest request) {
         return ResponseEntity.ok(authService.login(request));
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<LoginResponse> refresh(@RequestBody RefreshTokenRequest request) {
+        return ResponseEntity.ok(authService.refresh(request == null ? null : request.refreshToken()));
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(@RequestBody RefreshTokenRequest request) {
+        authService.logout(request == null ? null : request.refreshToken());
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/me")
