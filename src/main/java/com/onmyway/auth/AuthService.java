@@ -57,7 +57,7 @@ public class AuthService {
         validateLoginRequest(request);
         String email = request.email().trim().toLowerCase(Locale.ROOT);
         User user = userRepository.findByEmailIgnoreCase(email)
-                .orElseThrow(() -> new IllegalArgumentException("Invalid email or password"));
+                .orElseThrow(() -> new InvalidAuthenticationException("Invalid email or password"));
 
         if (user.getStatus() != UserStatus.ACTIVE) {
             throw new InvalidAuthenticationException("User account is not active");
