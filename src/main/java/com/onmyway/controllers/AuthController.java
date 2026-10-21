@@ -1,6 +1,7 @@
 package com.onmyway.controllers;
 
 import com.onmyway.auth.AuthService;
+import com.onmyway.auth.ClientIpAddressResolver;
 import com.onmyway.auth.InvalidAuthenticationException;
 import com.onmyway.auth.LoginRateLimiter;
 import com.onmyway.auth.api.CurrentUserResponse;
@@ -24,10 +25,13 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
     private final AuthService authService;
     private final LoginRateLimiter loginRateLimiter;
+    private final ClientIpAddressResolver clientIpAddressResolver;
 
-    public AuthController(AuthService authService, LoginRateLimiter loginRateLimiter) {
+    public AuthController(AuthService authService, LoginRateLimiter loginRateLimiter,
+                          ClientIpAddressResolver clientIpAddressResolver) {
         this.authService = authService;
         this.loginRateLimiter = loginRateLimiter;
+        this.clientIpAddressResolver = clientIpAddressResolver;
     }
 
     @PostMapping("/register")
@@ -38,7 +42,7 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(@RequestBody LoginRequest request, HttpServletRequest servletRequest) {
         String email = request == null ? "" : request.email();
-        String ipAddress = servletRequest.getRemoteAddr();
+        String ipAddress = clientIpAddressResolver.resolve(servletRequest);
         LoginRateLimiter.Attempt attempt = loginRateLimiter.reserveAttempt(ipAddress, email);
         try {
             LoginResponse response = authService.login(request);
