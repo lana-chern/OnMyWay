@@ -54,6 +54,24 @@ class LoginRateLimiterTest {
     }
 
     @Test
+    void fullStoreDoesNotBlockRequestsForAlreadyTrackedKeys() {
+        LoginRateLimiter limiter = new LoginRateLimiter(4);
+
+        LoginRateLimiter.Attempt first = limiter.reserveAttempt("192.0.2.20", "first@example.com");
+        limiter.recordSuccess(first);
+        LoginRateLimiter.Attempt second = limiter.reserveAttempt("192.0.2.21", "second@example.com");
+        limiter.recordSuccess(second);
+
+        assertThatCode(() -> {
+            LoginRateLimiter.Attempt attempt = limiter.reserveAttempt("192.0.2.20", "first@example.com");
+            limiter.recordSuccess(attempt);
+        }).doesNotThrowAnyException();
+
+        assertThatThrownBy(() -> limiter.reserveAttempt("192.0.2.22", "third@example.com"))
+                .isInstanceOf(TooManyLoginAttemptsException.class);
+    }
+
+    @Test
     void successfulLoginDoesNotCountAsFailure() {
         LoginRateLimiter limiter = new LoginRateLimiter();
         for (int i = 0; i < 5; i++) {
