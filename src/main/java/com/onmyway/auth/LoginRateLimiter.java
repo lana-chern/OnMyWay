@@ -19,6 +19,18 @@ public class LoginRateLimiter {
     private static final int MAX_TRACKED_KEYS = 10_000;
 
     private final Map<String, AttemptWindow> attempts = new HashMap<>();
+    private final int maxTrackedKeys;
+
+    public LoginRateLimiter() {
+        this(MAX_TRACKED_KEYS);
+    }
+
+    LoginRateLimiter(int maxTrackedKeys) {
+        if (maxTrackedKeys < 2) {
+            throw new IllegalArgumentException("maxTrackedKeys must be at least 2");
+        }
+        this.maxTrackedKeys = maxTrackedKeys;
+    }
 
     public synchronized Attempt reserveAttempt(String ipAddress, String email) {
         long now = System.currentTimeMillis();
@@ -26,10 +38,10 @@ public class LoginRateLimiter {
         String emailKey = emailKey(email);
         String ipKey = ipKey(ipAddress);
         if (isLimited(emailKey, MAX_EMAIL_FAILURES, now)
-                || isLimited(ipKey, MAX_IP_FAILURES, now)
-                || attempts.size() >= MAX_TRACKED_KEYS) {
+                || isLimited(ipKey, MAX_IP_FAILURES, now)) {
             throw new TooManyLoginAttemptsException();
         }
+        ensureCapacityFor(emailKey, ipKey);
         AttemptWindow emailWindow = getOrCreate(emailKey, now);
         AttemptWindow ipWindow = getOrCreate(ipKey, now);
         emailWindow.inFlight++;
@@ -77,6 +89,23 @@ public class LoginRateLimiter {
             return false;
         }
         return window.failures + window.inFlight >= limit;
+    }
+
+    private void ensureCapacityFor(String emailKey, String ipKey) {
+        int newKeys = (attempts.containsKey(emailKey) ? 0 : 1)
+                + (attempts.containsKey(ipKey) ? 0 : 1);
+        while (attempts.size() + newKeys > maxTrackedKeys) {
+            String removableKey = attempts.entrySet().stream()
+                    .filter(entry -> !entry.getKey().equals(emailKey) && !entry.getKey().equals(ipKey))
+                    .filter(entry -> entry.getValue().inFlight == 0 && entry.getValue().failures == 0)
+                    .map(Map.Entry::getKey)
+                    .findFirst()
+                    .orElse(null);
+            if (removableKey == null) {
+                throw new TooManyLoginAttemptsException();
+            }
+            attempts.remove(removableKey);
+        }
     }
 
     private AttemptWindow getOrCreate(String key, long now) {
