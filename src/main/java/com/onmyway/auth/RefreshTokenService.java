@@ -46,7 +46,7 @@ public class RefreshTokenService {
         return rawToken;
     }
 
-    @Transactional(noRollbackFor = IllegalArgumentException.class)
+    @Transactional(noRollbackFor = InvalidAuthenticationException.class)
     public RefreshGrant rotate(String rawToken) {
         if (rawToken == null || rawToken.isBlank()) {
             throw new InvalidAuthenticationException("Invalid refresh token");
