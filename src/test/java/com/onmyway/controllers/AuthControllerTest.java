@@ -5,6 +5,7 @@ import com.onmyway.data.entities.Role;
 import com.onmyway.data.entities.User;
 import com.onmyway.data.entities.UserStatus;
 import com.onmyway.data.repositories.PlaceRepository;
+import com.onmyway.data.repositories.RefreshTokenRepository;
 import com.onmyway.data.repositories.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,6 +22,12 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+
 @SpringBootTest
 @AutoConfigureMockMvc
 @TestPropertySource(properties = "omw.jwt.secret=MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=")
@@ -35,11 +42,15 @@ class AuthControllerTest {
     PlaceRepository placeRepository;
 
     @Autowired
+    RefreshTokenRepository refreshTokenRepository;
+
+    @Autowired
     JwtService jwtService;
 
     @BeforeEach
     void cleanUsers() {
         placeRepository.deleteAll();
+        refreshTokenRepository.deleteAll();
         userRepository.deleteAll();
     }
 
@@ -237,9 +248,64 @@ class AuthControllerTest {
                                   "password": "wrong-password"
                                 }
                                 """))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.title").value("Invalid request"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.title").value("Unauthorized"))
                 .andExpect(jsonPath("$.detail").value("Invalid email or password"));
+    }
+
+    @Test
+    void rateLimitsRepeatedLoginAttemptsForUnknownEmail() throws Exception {
+        for (int i = 0; i < 5; i++) {
+            mockMvc.perform(post("/api/auth/login")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {"email":"rate-limit-unknown@example.com","password":"wrong-password"}
+                                    """))
+                    .andExpect(status().isUnauthorized())
+                    .andExpect(jsonPath("$.detail").value("Invalid email or password"));
+        }
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"rate-limit-unknown@example.com","password":"wrong-password"}
+                                """))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.title").value("Too many login attempts"));
+    }
+
+    @Test
+    void concurrentRegistrationWithSameEmailCreatesOnlyOneUser() throws Exception {
+        String body = """
+                {"email":"concurrent-register@example.com","password":"password123","displayName":"Concurrent"}
+                """;
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        try {
+            var request = (java.util.concurrent.Callable<Integer>) () -> {
+                ready.countDown();
+                if (!start.await(5, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("Timed out waiting to start concurrent registration");
+                }
+                return mockMvc.perform(post("/api/auth/register")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(body))
+                        .andReturn().getResponse().getStatus();
+            };
+            Future<Integer> first = executor.submit(request);
+            Future<Integer> second = executor.submit(request);
+            assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            assertThat(java.util.List.of(first.get(10, TimeUnit.SECONDS), second.get(10, TimeUnit.SECONDS)))
+                    .containsExactlyInAnyOrder(201, 400);
+            assertThat(userRepository.findAll().stream()
+                    .filter(user -> user.getEmail().equals("concurrent-register@example.com")))
+                    .hasSize(1);
+        } finally {
+            executor.shutdownNow();
+        }
     }
 
     @Test
@@ -256,9 +322,9 @@ class AuthControllerTest {
                                   "password": "password123"
                                 }
                                 """))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.title").value("Invalid request"))
-                .andExpect(jsonPath("$.detail").value("User account is not active"));
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.title").value("Unauthorized"))
+                .andExpect(jsonPath("$.detail").value("Invalid email or password"));
     }
 
     @Test
@@ -298,6 +364,151 @@ class AuthControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.title").value("Invalid request"))
                 .andExpect(jsonPath("$.detail").value("Email is required"));
+    }
+
+    @Test
+    void refreshRotatesTokenAndRejectsPreviouslyUsedToken() throws Exception {
+        registerUser("refresh@example.com", "password123", "Refresh User");
+
+        String loginResponse = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "refresh@example.com",
+                                  "password": "password123"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.refreshToken").isString())
+                .andReturn().getResponse().getContentAsString();
+        String originalRefreshToken = com.jayway.jsonpath.JsonPath.read(loginResponse, "$.refreshToken");
+
+        String refreshResponse = mockMvc.perform(post("/api/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"refreshToken":"%s"}
+                                """.formatted(originalRefreshToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").isString())
+                .andExpect(jsonPath("$.refreshToken").isString())
+                .andExpect(jsonPath("$.user.email").value("refresh@example.com"))
+                .andReturn().getResponse().getContentAsString();
+        String rotatedRefreshToken = com.jayway.jsonpath.JsonPath.read(refreshResponse, "$.refreshToken");
+        org.assertj.core.api.Assertions.assertThat(rotatedRefreshToken).isNotEqualTo(originalRefreshToken);
+
+        mockMvc.perform(post("/api/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"refreshToken":"%s"}
+                                """.formatted(originalRefreshToken)))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void logoutRevokesRefreshToken() throws Exception {
+        registerUser("logout@example.com", "password123", "Logout User");
+        String loginResponse = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "logout@example.com",
+                                  "password": "password123"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String refreshToken = com.jayway.jsonpath.JsonPath.read(loginResponse, "$.refreshToken");
+
+        mockMvc.perform(post("/api/auth/logout")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"refreshToken":"%s"}
+                                """.formatted(refreshToken)))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(post("/api/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"refreshToken":"%s"}
+                                """.formatted(refreshToken)))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void onlyOneConcurrentRefreshRequestCanRotateTheSameToken() throws Exception {
+        registerUser("concurrent-refresh@example.com", "password123", "Concurrent Refresh");
+        String loginResponse = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"concurrent-refresh@example.com","password":"password123"}
+                                """))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String refreshToken = com.jayway.jsonpath.JsonPath.read(loginResponse, "$.refreshToken");
+        String body = """
+                {"refreshToken":"%s"}
+                """.formatted(refreshToken);
+
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        try {
+            var request = (java.util.concurrent.Callable<Integer>) () -> {
+                ready.countDown();
+                if (!start.await(5, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("Timed out waiting to start concurrent refresh");
+                }
+                return mockMvc.perform(post("/api/auth/refresh")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(body))
+                        .andReturn().getResponse().getStatus();
+            };
+            Future<Integer> first = executor.submit(request);
+            Future<Integer> second = executor.submit(request);
+            assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            assertThat(java.util.List.of(first.get(10, TimeUnit.SECONDS), second.get(10, TimeUnit.SECONDS)))
+                    .containsExactlyInAnyOrder(200, 401);
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    void rejectsRefreshRequestWithoutTokenAsBadRequest() throws Exception {
+        mockMvc.perform(post("/api/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title").value("Invalid request"))
+                .andExpect(jsonPath("$.detail").value("Refresh token is required"));
+    }
+
+    @Test
+    void refreshRejectsAndRevokesTokenWhenUserIsBlocked() throws Exception {
+        User user = registerUser("blocked-refresh@example.com", "password123", "Blocked User");
+        String loginResponse = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"blocked-refresh@example.com","password":"password123"}
+                                """))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String refreshToken = com.jayway.jsonpath.JsonPath.read(loginResponse, "$.refreshToken");
+
+        user.setStatus(UserStatus.BLOCKED);
+        userRepository.saveAndFlush(user);
+
+        mockMvc.perform(post("/api/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"refreshToken":"%s"}
+                                """.formatted(refreshToken)))
+                .andExpect(status().isUnauthorized());
+
+        assertThat(refreshTokenRepository.findAll()).filteredOn(token -> token.getUser().getId().equals(user.getId()))
+                .allSatisfy(token -> assertThat(token.getRevokedAt()).isNotNull());
     }
 
     private User registerUser(String email, String password, String displayName) throws Exception {

@@ -8,6 +8,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import com.onmyway.api.exception.StalePlaceVersionException;
+import com.onmyway.auth.InvalidAuthenticationException;
+import com.onmyway.auth.TooManyLoginAttemptsException;
 
 import java.util.stream.Collectors;
 
@@ -28,6 +30,20 @@ public class GlobalExceptionHandler {
                 .collect(Collectors.joining("; "));
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, detail);
         problem.setTitle("Validation failed");
+        return problem;
+    }
+
+    @ExceptionHandler(InvalidAuthenticationException.class)
+    ProblemDetail handleInvalidAuthentication(InvalidAuthenticationException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, exception.getMessage());
+        problem.setTitle("Unauthorized");
+        return problem;
+    }
+
+    @ExceptionHandler(TooManyLoginAttemptsException.class)
+    ProblemDetail handleTooManyLoginAttempts(TooManyLoginAttemptsException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.TOO_MANY_REQUESTS, exception.getMessage());
+        problem.setTitle("Too many login attempts");
         return problem;
     }
 

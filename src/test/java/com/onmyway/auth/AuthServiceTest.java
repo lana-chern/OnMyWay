@@ -32,6 +32,7 @@ class AuthServiceTest {
     @Mock PasswordEncoder passwordEncoder;
     @Mock AuthenticationManager authenticationManager;
     @Mock JwtService jwtService;
+    @Mock RefreshTokenService refreshTokenService;
     @InjectMocks AuthService authService;
 
     @Test
@@ -65,13 +66,16 @@ class AuthServiceTest {
         User user = user("test@example.com", "encoded-password", "Alice", UserStatus.ACTIVE);
         when(userRepository.findByEmailIgnoreCase("test@example.com")).thenReturn(java.util.Optional.of(user));
         when(jwtService.generateToken(1L)).thenReturn("jwt-token");
+        when(refreshTokenService.issue(user)).thenReturn("refresh-token");
         LoginResponse response = authService.login(request);
         assertThat(response.accessToken()).isEqualTo("jwt-token");
+        assertThat(response.refreshToken()).isEqualTo("refresh-token");
         assertThat(response.user().email()).isEqualTo("test@example.com");
         assertThat(response.user().displayName()).isEqualTo("Alice");
         assertThat(response.user().roles()).containsExactly(Role.USER);
         verify(authenticationManager).authenticate(any(UsernamePasswordAuthenticationToken.class));
         verify(jwtService).generateToken(1L);
+        verify(refreshTokenService).issue(user);
     }
 
     @Test
@@ -108,7 +112,7 @@ class AuthServiceTest {
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
                 .thenThrow(mock(AuthenticationException.class));
         assertThatThrownBy(() -> authService.login(request))
-                .isInstanceOf(IllegalArgumentException.class).hasMessage("Invalid email or password");
+                .isInstanceOf(InvalidAuthenticationException.class).hasMessage("Invalid email or password");
         verifyNoInteractions(jwtService);
     }
 
@@ -117,9 +121,12 @@ class AuthServiceTest {
         LoginRequest request = new LoginRequest("test@example.com", "password123");
         User user = user("test@example.com", "encoded-password", "Alice", UserStatus.BLOCKED);
         when(userRepository.findByEmailIgnoreCase("test@example.com")).thenReturn(java.util.Optional.of(user));
+        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
+                .thenThrow(mock(AuthenticationException.class));
         assertThatThrownBy(() -> authService.login(request))
-                .isInstanceOf(IllegalArgumentException.class).hasMessage("User account is not active");
-        verifyNoInteractions(authenticationManager, jwtService);
+                .isInstanceOf(InvalidAuthenticationException.class).hasMessage("Invalid email or password");
+        verify(authenticationManager).authenticate(any(UsernamePasswordAuthenticationToken.class));
+        verifyNoInteractions(jwtService);
     }
 
     @Test
@@ -127,7 +134,7 @@ class AuthServiceTest {
         LoginRequest request = new LoginRequest("unknown@example.com", "password123");
         when(userRepository.findByEmailIgnoreCase("unknown@example.com")).thenReturn(java.util.Optional.empty());
         assertThatThrownBy(() -> authService.login(request))
-                .isInstanceOf(IllegalArgumentException.class).hasMessage("Invalid email or password");
+                .isInstanceOf(InvalidAuthenticationException.class).hasMessage("Invalid email or password");
         verifyNoInteractions(authenticationManager, jwtService);
     }
 
@@ -189,6 +196,39 @@ class AuthServiceTest {
         assertThatThrownBy(() -> authService.register(request))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Display name is required and must be at most 100 characters");
+    }
+
+
+    @Test
+    void rejectsInvalidEmailFormatDuringRegistration() {
+        RegisterRequest request = new RegisterRequest("not-an-email", "password123", "Alice");
+        assertThatThrownBy(() -> authService.register(request))
+                .isInstanceOf(IllegalArgumentException.class).hasMessage("Email must be a valid email address");
+        verifyNoInteractions(userRepository, passwordEncoder);
+    }
+
+    @Test
+    void rejectsPasswordLongerThanBcryptLimitDuringRegistration() {
+        RegisterRequest request = new RegisterRequest("test@example.com", "p".repeat(73), "Alice");
+        assertThatThrownBy(() -> authService.register(request))
+                .isInstanceOf(IllegalArgumentException.class).hasMessage("Password must not exceed 72 UTF-8 bytes");
+        verifyNoInteractions(userRepository, passwordEncoder);
+    }
+
+    @Test
+    void rejectsInvalidEmailFormatDuringLogin() {
+        LoginRequest request = new LoginRequest("not-an-email", "password123");
+        assertThatThrownBy(() -> authService.login(request))
+                .isInstanceOf(IllegalArgumentException.class).hasMessage("Email must be a valid email address");
+        verifyNoInteractions(userRepository, authenticationManager);
+    }
+
+    @Test
+    void rejectsPasswordLongerThanBcryptLimitDuringLogin() {
+        LoginRequest request = new LoginRequest("test@example.com", "p".repeat(73));
+        assertThatThrownBy(() -> authService.login(request))
+                .isInstanceOf(IllegalArgumentException.class).hasMessage("Password must not exceed 72 UTF-8 bytes");
+        verifyNoInteractions(userRepository, authenticationManager);
     }
 
     private User user(String email, String passwordHash, String displayName, UserStatus status) {
