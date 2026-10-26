@@ -59,13 +59,13 @@ public class RefreshTokenService {
 
         Instant now = Instant.now();
         String tokenHash = hash(rawToken);
-        RefreshToken tokenPreview = refreshTokenRepository.findByTokenHash(tokenHash)
+        UUID familyId = refreshTokenRepository.findFamilyIdByTokenHash(tokenHash)
                 .orElseThrow(() -> new InvalidAuthenticationException("Invalid refresh token"));
 
         // Lock the family before locking an individual token. This makes reuse detection
         // atomic with concurrent rotations, preventing a just-created descendant from
         // escaping the family-wide revocation.
-        refreshTokenRepository.lockFamily(tokenPreview.getFamilyId());
+        refreshTokenRepository.lockFamily(familyId);
         RefreshToken storedToken = refreshTokenRepository.findByTokenHashForUpdate(tokenHash)
                 .orElseThrow(() -> new InvalidAuthenticationException("Invalid refresh token"));
 
