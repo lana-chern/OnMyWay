@@ -101,11 +101,14 @@ public class RefreshTokenService {
             return;
         }
 
-        refreshTokenRepository.findByTokenHashForUpdate(hash(rawToken))
-                .ifPresent(token -> {
-                    token.revoke(Instant.now());
-                    refreshTokenRepository.save(token);
-                });
+        String tokenHash = hash(rawToken);
+        refreshTokenRepository.findFamilyIdByTokenHash(tokenHash).ifPresent(familyId -> {
+            // Use the same lock order as rotate(): family first, then token-level work.
+            // Revoking the whole family prevents a concurrent rotation from leaving a
+            // replacement refresh token active after logout.
+            refreshTokenRepository.lockFamily(familyId);
+            refreshTokenRepository.revokeActiveTokensByFamilyId(familyId, Instant.now());
+        });
     }
 
     /**
