@@ -17,6 +17,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.HexFormat;
 import java.util.concurrent.CountDownLatch;
@@ -169,7 +170,7 @@ class RefreshTokenConcurrencyIntegrationTest {
                 where family_id = ?
                   and revoked_at is null
                   and expires_at > ?
-                """, Integer.class, familyId, Instant.now());
+                """, Integer.class, familyId, Timestamp.from(Instant.now()));
         return count == null ? 0 : count;
     }
 
