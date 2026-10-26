@@ -59,9 +59,9 @@ class LoginRateLimiterTest {
         LoginRateLimiter limiter = new LoginRateLimiter(4);
 
         LoginRateLimiter.Attempt first = limiter.reserveAttempt("192.0.2.20", "first@example.com");
-        limiter.recordSuccess(first);
+        limiter.recordFailure(first);
         LoginRateLimiter.Attempt second = limiter.reserveAttempt("192.0.2.21", "second@example.com");
-        limiter.recordSuccess(second);
+        limiter.recordFailure(second);
 
         assertThatCode(() -> {
             LoginRateLimiter.Attempt attempt = limiter.reserveAttempt("192.0.2.20", "first@example.com");
@@ -72,6 +72,13 @@ class LoginRateLimiterTest {
             LoginRateLimiter.Attempt third = limiter.reserveAttempt("192.0.2.22", "third@example.com");
             limiter.recordSuccess(third);
         }).doesNotThrowAnyException();
+
+        for (int i = 0; i < 19; i++) {
+            LoginRateLimiter.Attempt attempt = limiter.reserveAttempt("192.0.2.20", "another" + i + "@example.com");
+            limiter.recordFailure(attempt);
+        }
+        assertThatThrownBy(() -> limiter.reserveAttempt("192.0.2.20", "blocked@example.com"))
+                .isInstanceOf(TooManyLoginAttemptsException.class);
     }
 
     @Test
