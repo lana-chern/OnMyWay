@@ -254,24 +254,15 @@ class AuthControllerTest {
     }
 
     @Test
-    void rateLimitsRepeatedLoginAttemptsForUnknownEmail() throws Exception {
+    void progressivelyDelaysRepeatedLoginAttemptsForUnknownEmailWithoutHardLockout() throws Exception {
         for (int i = 0; i < 5; i++) {
             mockMvc.perform(post("/api/auth/login")
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content("""
-                                    {"email":"rate-limit-unknown@example.com","password":"wrong-password"}
-                                    """))
-                    .andExpect(status().isUnauthorized())
-                    .andExpect(jsonPath("$.detail").value("Invalid email or password"));
-        }
-
-        mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"email":"rate-limit-unknown@example.com","password":"wrong-password"}
                                 """))
-                .andExpect(status().isTooManyRequests())
-                .andExpect(jsonPath("$.title").value("Too many login attempts"));
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.detail").value("Invalid email or password"));
     }
 
     @Test
