@@ -156,7 +156,7 @@ public class AuthService {
         if (normalizedEmail.length() > 320 || !normalizedEmail.matches("(?i)^[A-Z0-9.!#$%&'*+/=?^_\u0060{|}~-]+@[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?(?:\\.[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?)+$")) {
             throw new IllegalArgumentException("Email must be a valid email address");
         }
-        if (request.password() == null || request.password().isBlank()) {
+        if (request.password() == null || request.password().isEmpty()) {
             throw new IllegalArgumentException("Password is required");
         }
         if (request.password().getBytes(StandardCharsets.UTF_8).length > 72) {
