@@ -159,8 +159,20 @@ class AuthServiceTest {
     }
 
     @Test
-    void rejectsBlankLoginPassword() {
-        LoginRequest request = new LoginRequest("test@example.com", "   ", null);
+    void acceptsWhitespaceOnlyPasswordForAuthentication() {
+        LoginRequest request = new LoginRequest("test@example.com", "        ", null);
+        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
+                .thenThrow(mock(AuthenticationException.class));
+
+        assertThatThrownBy(() -> authService.login(request))
+                .isInstanceOf(InvalidAuthenticationException.class)
+                .hasMessage("Invalid email or password");
+        verify(authenticationManager).authenticate(any(UsernamePasswordAuthenticationToken.class));
+    }
+
+    @Test
+    void rejectsEmptyLoginPassword() {
+        LoginRequest request = new LoginRequest("test@example.com", "", null);
         assertThatThrownBy(() -> authService.login(request))
                 .isInstanceOf(IllegalArgumentException.class).hasMessage("Password is required");
     }
