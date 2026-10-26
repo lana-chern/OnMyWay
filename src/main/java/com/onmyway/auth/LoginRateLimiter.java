@@ -12,8 +12,9 @@ import java.util.Map;
 
 /**
  * Process-local login throttle. For multi-instance deployments, use a shared store such as Redis.
- * IP counters are retained for the full window. When capacity is tight, idle email counters are
- * evicted first, preserving the primary per-IP brute-force limit.
+ * Per-IP counters are retained for the full window. When the bounded primary store is full,
+ * untracked IPs use a fixed number of overflow buckets; hash collisions may conservatively
+ * rate-limit unrelated IPs, but do not allow the IP limit to be bypassed by store exhaustion.
  */
 @Component
 public class LoginRateLimiter {
@@ -21,11 +22,13 @@ public class LoginRateLimiter {
     private static final long WINDOW_MILLIS = Duration.ofMinutes(15).toMillis();
     private static final int MAX_IP_FAILURES = 20;
     private static final int MAX_TRACKED_KEYS = 10_000;
+    private static final int OVERFLOW_IP_BUCKET_COUNT = 256;
     private static final int SUSPICIOUS_EMAIL_FAILURES = 3;
     private static final int SUSPICIOUS_IP_FAILURES = 10;
     private static final long MAX_DELAY_MILLIS = 1_600;
 
     private final Map<String, AttemptWindow> attempts = new LinkedHashMap<>(128, 0.75f, true);
+    private final AttemptWindow[] overflowIpAttempts = new AttemptWindow[OVERFLOW_IP_BUCKET_COUNT];
     private final int maxTrackedKeys;
 
     public LoginRateLimiter() { this(MAX_TRACKED_KEYS); }
@@ -38,25 +41,76 @@ public class LoginRateLimiter {
     public synchronized Attempt reserveAttempt(String ipAddress, String email) {
         long now = System.currentTimeMillis();
         removeExpired(now);
-        String emailKey = emailKey(email);
-        String ipKey = ipKey(ipAddress);
-        if (isLimited(ipKey, MAX_IP_FAILURES, now)) {
-            log.warn("Login rate limit reached for hashed IP key {}", safeKey(ipKey));
+        String requestedEmailKey = emailKey(email);
+        String requestedIpKey = ipKey(ipAddress);
+        int overflowBucket = overflowBucketFor(requestedIpKey);
+
+        // Once a bucket is active, route all IPs hashing to it through that bucket until its
+        // window expires. This prevents an overflowed IP from switching back to a fresh counter.
+        boolean useOverflow = isActive(overflowIpAttempts[overflowBucket], now);
+        AttemptWindow knownIpWindow = attempts.get(requestedIpKey);
+        if (!useOverflow && knownIpWindow != null && isLimited(requestedIpKey, MAX_IP_FAILURES, now)) {
+            log.warn("Login rate limit reached for hashed IP key {}", safeKey(requestedIpKey));
             throw new TooManyLoginAttemptsException();
         }
-        ensureCapacityFor(emailKey, ipKey);
-        AttemptWindow emailWindow = getOrCreate(emailKey, now);
-        AttemptWindow ipWindow = getOrCreate(ipKey, now);
-        long delayMillis = progressiveDelay(emailWindow.failures);
-        if (emailWindow.failures >= SUSPICIOUS_EMAIL_FAILURES || ipWindow.failures >= SUSPICIOUS_IP_FAILURES) {
-            log.warn("Suspicious login activity detected: emailFailures={}, ipFailures={}; step-up verification recommended",
-                    emailWindow.failures, ipWindow.failures);
+        if (useOverflow && isLimited(overflowBucket, MAX_IP_FAILURES, now)) {
+            log.warn("Login rate limit reached for overflow IP bucket {}", overflowBucket);
+            throw new TooManyLoginAttemptsException();
         }
-        emailWindow.inFlight++;
+
+        // Free email-only entries first. IP counters are never evicted to make room.
+        while (requiredSlots(requestedEmailKey, requestedIpKey) > maxTrackedKeys - attempts.size()) {
+            String removableKey = attempts.entrySet().stream()
+                    .filter(entry -> entry.getKey().startsWith("email:"))
+                    .filter(entry -> !entry.getKey().equals(requestedEmailKey))
+                    .filter(entry -> entry.getValue().inFlight == 0)
+                    .map(Map.Entry::getKey).findFirst().orElse(null);
+            if (removableKey == null) break;
+            attempts.remove(removableKey);
+        }
+
+        boolean trackIp = !useOverflow && attempts.containsKey(requestedIpKey);
+        if (!useOverflow && !trackIp && attempts.size() < maxTrackedKeys) {
+            attempts.put(requestedIpKey, new AttemptWindow(now));
+            trackIp = true;
+        }
+        if (!trackIp) useOverflow = true;
+
+        // IP tracking has priority over per-email tracking when the store is full.
+        String trackedEmailKey = requestedEmailKey;
+        if (!attempts.containsKey(trackedEmailKey) && attempts.size() >= maxTrackedKeys) {
+            trackedEmailKey = null;
+        }
+        AttemptWindow emailWindow = trackedEmailKey == null ? null : getOrCreate(trackedEmailKey, now);
+        AttemptWindow ipWindow;
+        if (useOverflow) {
+            overflowBucket = overflowBucketFor(requestedIpKey);
+            ipWindow = getOrCreateOverflow(overflowBucket, now);
+        } else {
+            ipWindow = attempts.get(requestedIpKey);
+        }
+
+        long emailFailures = emailWindow == null ? 0 : emailWindow.failures;
+        long ipFailures = ipWindow.failures;
+        long delayMillis = progressiveDelay((int) emailFailures);
+        if (emailFailures >= SUSPICIOUS_EMAIL_FAILURES || ipFailures >= SUSPICIOUS_IP_FAILURES) {
+            log.warn("Suspicious login activity detected: emailFailures={}, ipFailures={}; step-up verification recommended",
+                    emailFailures, ipFailures);
+        }
+        if (emailWindow != null) emailWindow.inFlight++;
         ipWindow.inFlight++;
-        boolean requiresAdditionalVerification = emailWindow.failures >= SUSPICIOUS_EMAIL_FAILURES
-                || ipWindow.failures >= SUSPICIOUS_IP_FAILURES;
-        return new Attempt(emailKey, ipKey, emailWindow.startedAt, ipWindow.startedAt, delayMillis, requiresAdditionalVerification);
+        boolean requiresAdditionalVerification = emailFailures >= SUSPICIOUS_EMAIL_FAILURES
+                || ipFailures >= SUSPICIOUS_IP_FAILURES;
+        return new Attempt(trackedEmailKey, useOverflow ? null : requestedIpKey,
+                trackedEmailKey == null ? -1 : emailWindow.startedAt, ipWindow.startedAt,
+                useOverflow ? overflowBucket : -1, delayMillis, requiresAdditionalVerification);
+    }
+
+    private int requiredSlots(String emailKey, String ipKey) {
+        int slots = 0;
+        if (!attempts.containsKey(ipKey)) slots++;
+        if (!attempts.containsKey(emailKey) && !emailKey.equals(ipKey)) slots++;
+        return slots;
     }
 
     public void applyDelay(Attempt attempt) {
@@ -73,16 +127,31 @@ public class LoginRateLimiter {
 
     private void finish(Attempt attempt, boolean failed) {
         long now = System.currentTimeMillis();
-        finishKey(attempt.emailKey, attempt.emailWindowStartedAt, failed, now);
-        finishKey(attempt.ipKey, attempt.ipWindowStartedAt, failed, now);
+        if (attempt.emailKey != null) finishKey(attempt.emailKey, attempt.emailWindowStartedAt, failed, now);
+        if (attempt.overflowBucket >= 0) {
+            finishOverflow(attempt.overflowBucket, attempt.ipWindowStartedAt, failed, now);
+        } else {
+            finishKey(attempt.ipKey, attempt.ipWindowStartedAt, failed, now);
+        }
     }
 
     private void finishKey(String key, long startedAt, boolean failed, long now) {
         AttemptWindow window = attempts.get(key);
         if (window == null || window.startedAt != startedAt || now - startedAt >= WINDOW_MILLIS) return;
+        finishWindow(window, failed);
+        if (window.inFlight == 0 && window.failures == 0) attempts.remove(key);
+    }
+
+    private void finishOverflow(int bucket, long startedAt, boolean failed, long now) {
+        AttemptWindow window = overflowIpAttempts[bucket];
+        if (window == null || window.startedAt != startedAt || now - startedAt >= WINDOW_MILLIS) return;
+        finishWindow(window, failed);
+        if (window.inFlight == 0 && window.failures == 0) overflowIpAttempts[bucket] = null;
+    }
+
+    private void finishWindow(AttemptWindow window, boolean failed) {
         if (window.inFlight > 0) window.inFlight--;
         if (failed) window.failures++;
-        if (window.inFlight == 0 && window.failures == 0) attempts.remove(key);
     }
 
     private boolean isLimited(String key, int limit, long now) {
@@ -92,26 +161,25 @@ public class LoginRateLimiter {
         return window.failures + window.inFlight >= limit;
     }
 
-    private void ensureCapacityFor(String emailKey, String ipKey) {
-        int newKeys = (attempts.containsKey(emailKey) ? 0 : 1) + (attempts.containsKey(ipKey) ? 0 : 1);
-        while (attempts.size() + newKeys > maxTrackedKeys) {
-            String removableKey = attempts.entrySet().stream()
-                    .filter(entry -> entry.getKey().startsWith("email:"))
-                    .filter(entry -> !entry.getKey().equals(emailKey))
-                    .filter(entry -> entry.getValue().inFlight == 0)
-                    .map(Map.Entry::getKey).findFirst().orElse(null);
-            if (removableKey == null) {
-                log.warn("Login throttle store is full; refusing an untracked IP key");
-                throw new TooManyLoginAttemptsException();
-            }
-            attempts.remove(removableKey);
-        }
+    private boolean isLimited(int bucket, int limit, long now) {
+        AttemptWindow window = overflowIpAttempts[bucket];
+        if (window == null) return false;
+        if (now - window.startedAt >= WINDOW_MILLIS) { overflowIpAttempts[bucket] = null; return false; }
+        return window.failures + window.inFlight >= limit;
+    }
+
+    private boolean isActive(AttemptWindow window, long now) {
+        return window != null && now - window.startedAt < WINDOW_MILLIS;
     }
 
     private long progressiveDelay(int priorEmailFailures) {
         if (priorEmailFailures <= 0) return 0;
         int shift = Math.min(priorEmailFailures - 1, 4);
         return Math.min(100L << shift, MAX_DELAY_MILLIS);
+    }
+
+    private int overflowBucketFor(String ipKey) {
+        return (ipKey.hashCode() & 0x7fffffff) % OVERFLOW_IP_BUCKET_COUNT;
     }
 
     private String safeKey(String key) { return Integer.toHexString(key.hashCode()); }
@@ -125,9 +193,23 @@ public class LoginRateLimiter {
         return window;
     }
 
+    private AttemptWindow getOrCreateOverflow(int bucket, long now) {
+        AttemptWindow window = overflowIpAttempts[bucket];
+        if (window == null || now - window.startedAt >= WINDOW_MILLIS) {
+            window = new AttemptWindow(now);
+            overflowIpAttempts[bucket] = window;
+        }
+        return window;
+    }
+
     private void removeExpired(long now) {
         Iterator<Map.Entry<String, AttemptWindow>> iterator = attempts.entrySet().iterator();
         while (iterator.hasNext()) if (now - iterator.next().getValue().startedAt >= WINDOW_MILLIS) iterator.remove();
+        for (int i = 0; i < overflowIpAttempts.length; i++) {
+            if (overflowIpAttempts[i] != null && now - overflowIpAttempts[i].startedAt >= WINDOW_MILLIS) {
+                overflowIpAttempts[i] = null;
+            }
+        }
     }
 
     private String emailKey(String email) { return "email:" + (email == null ? "" : email.trim().toLowerCase(Locale.ROOT)); }
@@ -136,12 +218,13 @@ public class LoginRateLimiter {
     public static final class Attempt {
         private final String emailKey, ipKey;
         private final long emailWindowStartedAt, ipWindowStartedAt, delayMillis;
+        private final int overflowBucket;
         private final boolean requiresAdditionalVerification;
         private Attempt(String emailKey, String ipKey, long emailWindowStartedAt, long ipWindowStartedAt,
-                        long delayMillis, boolean requiresAdditionalVerification) {
+                        int overflowBucket, long delayMillis, boolean requiresAdditionalVerification) {
             this.emailKey = emailKey; this.ipKey = ipKey;
             this.emailWindowStartedAt = emailWindowStartedAt; this.ipWindowStartedAt = ipWindowStartedAt;
-            this.delayMillis = delayMillis;
+            this.overflowBucket = overflowBucket; this.delayMillis = delayMillis;
             this.requiresAdditionalVerification = requiresAdditionalVerification;
         }
         public long delayMillis() { return delayMillis; }
