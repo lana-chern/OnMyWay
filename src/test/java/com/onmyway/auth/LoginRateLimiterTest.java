@@ -8,7 +8,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class LoginRateLimiterTest {
 
     @Test
-    void limitsRepeatedFailuresForSameEmail() {
+    void progressivelyDelaysRepeatedFailuresForSameEmailWithoutHardLockout() {
         LoginRateLimiter limiter = new LoginRateLimiter();
 
         for (int i = 0; i < 5; i++) {
@@ -16,8 +16,9 @@ class LoginRateLimiterTest {
             limiter.recordFailure(attempt);
         }
 
-        assertThatThrownBy(() -> limiter.reserveAttempt("192.0.2.10", "person@example.com"))
-                .isInstanceOf(TooManyLoginAttemptsException.class);
+        LoginRateLimiter.Attempt sixth = limiter.reserveAttempt("192.0.2.10", "person@example.com");
+        org.assertj.core.api.Assertions.assertThat(sixth.delayMillis()).isEqualTo(1_600L);
+        limiter.recordSuccess(sixth);
     }
 
     @Test
@@ -58,17 +59,19 @@ class LoginRateLimiterTest {
         LoginRateLimiter limiter = new LoginRateLimiter(4);
 
         LoginRateLimiter.Attempt first = limiter.reserveAttempt("192.0.2.20", "first@example.com");
-        limiter.recordFailure(first);
+        limiter.recordSuccess(first);
         LoginRateLimiter.Attempt second = limiter.reserveAttempt("192.0.2.21", "second@example.com");
-        limiter.recordFailure(second);
+        limiter.recordSuccess(second);
 
         assertThatCode(() -> {
             LoginRateLimiter.Attempt attempt = limiter.reserveAttempt("192.0.2.20", "first@example.com");
             limiter.recordSuccess(attempt);
         }).doesNotThrowAnyException();
 
-        assertThatThrownBy(() -> limiter.reserveAttempt("192.0.2.22", "third@example.com"))
-                .isInstanceOf(TooManyLoginAttemptsException.class);
+        assertThatCode(() -> {
+            LoginRateLimiter.Attempt third = limiter.reserveAttempt("192.0.2.22", "third@example.com");
+            limiter.recordSuccess(third);
+        }).doesNotThrowAnyException();
     }
 
     @Test
