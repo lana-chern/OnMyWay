@@ -103,6 +103,45 @@ class LoginRateLimiterTest {
     }
 
     @Test
+    void concurrentAttemptsForSameEmailTriggerCaptchaAfterSuspiciousThreshold() {
+        LoginRateLimiter limiter = new LoginRateLimiter();
+        java.util.List<LoginRateLimiter.Attempt> inFlight = new java.util.ArrayList<>();
+
+        for (int i = 0; i < 3; i++) {
+            LoginRateLimiter.Attempt attempt = limiter.reserveAttempt("192.0.2.40", "person@example.com");
+            assertThat(attempt.requiresAdditionalVerification()).isFalse();
+            inFlight.add(attempt);
+        }
+
+        LoginRateLimiter.Attempt thresholdAttempt =
+                limiter.reserveAttempt("192.0.2.40", "person@example.com");
+        assertThat(thresholdAttempt.requiresAdditionalVerification()).isTrue();
+
+        inFlight.forEach(limiter::recordSuccess);
+        limiter.recordSuccess(thresholdAttempt);
+    }
+
+    @Test
+    void concurrentAttemptsFromSameIpTriggerCaptchaAfterSuspiciousThreshold() {
+        LoginRateLimiter limiter = new LoginRateLimiter();
+        java.util.List<LoginRateLimiter.Attempt> inFlight = new java.util.ArrayList<>();
+
+        for (int i = 0; i < 10; i++) {
+            LoginRateLimiter.Attempt attempt =
+                    limiter.reserveAttempt("192.0.2.41", "person" + i + "@example.com");
+            assertThat(attempt.requiresAdditionalVerification()).isFalse();
+            inFlight.add(attempt);
+        }
+
+        LoginRateLimiter.Attempt thresholdAttempt =
+                limiter.reserveAttempt("192.0.2.41", "another@example.com");
+        assertThat(thresholdAttempt.requiresAdditionalVerification()).isTrue();
+
+        inFlight.forEach(limiter::recordSuccess);
+        limiter.recordSuccess(thresholdAttempt);
+    }
+
+    @Test
     void successfulLoginDoesNotCountAsFailure() {
         LoginRateLimiter limiter = new LoginRateLimiter();
         for (int i = 0; i < 5; i++) {
