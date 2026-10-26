@@ -30,6 +30,18 @@ class ClientIpAddressResolverTest {
     }
 
     @Test
+    void ignoresSpoofedAddressPrependedToForwardedChain() {
+        ClientIpAddressResolver resolver = new ClientIpAddressResolver("10.0.0.10, 10.0.0.11");
+        HttpServletRequest request = mock(HttpServletRequest.class);
+        when(request.getRemoteAddr()).thenReturn("10.0.0.10");
+        // The client-supplied spoof is leftmost; the trusted proxy appends the actual client IP.
+        when(request.getHeader("X-Forwarded-For"))
+                .thenReturn("203.0.113.200, 198.51.100.7, 10.0.0.11");
+
+        assertThat(resolver.resolve(request)).isEqualTo("198.51.100.7");
+    }
+
+    @Test
     void fallsBackToRemoteAddressWhenForwardedHeaderIsBlank() {
         ClientIpAddressResolver resolver = new ClientIpAddressResolver("10.0.0.10");
         HttpServletRequest request = mock(HttpServletRequest.class);
