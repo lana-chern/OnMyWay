@@ -9,8 +9,10 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
@@ -35,6 +37,29 @@ class RefreshTokenServiceTest {
 
         verifyNoInteractions(userRepository);
         verify(refreshTokenRepository, never()).save(any(RefreshToken.class));
+        verify(refreshTokenRepository, never()).revokeActiveTokensByFamilyId(any(UUID.class), any(Instant.class));
+    }
+
+    @Test
+    void replayingRevokedTokenRevokesAllActiveTokensInItsFamily() {
+        User user = activeUser();
+        UUID familyId = UUID.randomUUID();
+        RefreshToken replayedToken = new RefreshToken(
+                user, "stored-hash", Instant.now().plusSeconds(60), familyId
+        );
+        replayedToken.revoke(Instant.now());
+        when(refreshTokenRepository.findByTokenHashForUpdate(anyString()))
+                .thenReturn(Optional.of(replayedToken));
+        when(refreshTokenRepository.revokeActiveTokensByFamilyId(eq(familyId), any(Instant.class)))
+                .thenReturn(1);
+
+        assertThatThrownBy(() -> service.rotate("replayed-token"))
+                .isInstanceOf(InvalidAuthenticationException.class)
+                .hasMessage("Invalid refresh token");
+
+        verify(refreshTokenRepository).revokeActiveTokensByFamilyId(eq(familyId), any(Instant.class));
+        verify(refreshTokenRepository, never()).save(any(RefreshToken.class));
+        verifyNoInteractions(userRepository);
     }
 
     @Test
