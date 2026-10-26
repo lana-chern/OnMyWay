@@ -91,16 +91,23 @@ public class LoginRateLimiter {
         }
 
         long emailFailures = emailWindow == null ? 0 : emailWindow.failures;
+        long emailAttemptsInFlight = emailWindow == null ? 0 : emailWindow.inFlight;
         long ipFailures = ipWindow.failures;
+        long ipAttemptsInFlight = ipWindow.inFlight;
         long delayMillis = progressiveDelay((int) emailFailures);
-        if (emailFailures >= SUSPICIOUS_EMAIL_FAILURES || ipFailures >= SUSPICIOUS_IP_FAILURES) {
-            log.warn("Suspicious login activity detected: emailFailures={}, ipFailures={}; step-up verification recommended",
-                    emailFailures, ipFailures);
+
+        // Count in-flight attempts conservatively when deciding whether to require CAPTCHA.
+        // Otherwise concurrent requests can all observe the same failure count and bypass
+        // step-up verification while their password checks are still running.
+        boolean requiresAdditionalVerification =
+                emailFailures + emailAttemptsInFlight >= SUSPICIOUS_EMAIL_FAILURES
+                || ipFailures + ipAttemptsInFlight >= SUSPICIOUS_IP_FAILURES;
+        if (requiresAdditionalVerification) {
+            log.warn("Suspicious login activity detected: emailFailures={}, emailInFlight={}, ipFailures={}, ipInFlight={}; step-up verification required",
+                    emailFailures, emailAttemptsInFlight, ipFailures, ipAttemptsInFlight);
         }
         if (emailWindow != null) emailWindow.inFlight++;
         ipWindow.inFlight++;
-        boolean requiresAdditionalVerification = emailFailures >= SUSPICIOUS_EMAIL_FAILURES
-                || ipFailures >= SUSPICIOUS_IP_FAILURES;
         return new Attempt(trackedEmailKey, useOverflow ? null : requestedIpKey,
                 trackedEmailKey == null ? -1 : emailWindow.startedAt, ipWindow.startedAt,
                 useOverflow ? overflowBucket : -1, delayMillis, requiresAdditionalVerification);
