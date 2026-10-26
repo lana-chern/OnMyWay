@@ -22,6 +22,7 @@ import java.util.HexFormat;
 public class RefreshTokenService {
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final int TOKEN_BYTES = 32;
+    private static final int CLEANUP_BATCH_SIZE = 500;
 
     private final RefreshTokenRepository refreshTokenRepository;
     private final UserRepository userRepository;
@@ -89,16 +90,18 @@ public class RefreshTokenService {
     }
 
     /**
-     * Removes expired tokens in batches at the database level. Revoked tokens are retained
-     * until their original expiry, then removed by the same cleanup.
+     * Deletes expired tokens in small transactions to limit lock duration and database load.
+     * Revoked tokens are retained until their original expiry.
      */
     @Scheduled(
             fixedDelayString = "${omw.auth.refresh-token-cleanup-interval-ms:86400000}",
             initialDelayString = "${omw.auth.refresh-token-cleanup-initial-delay-ms:60000}"
     )
-    @Transactional
     public void cleanupExpiredTokens() {
-        refreshTokenRepository.deleteExpiredTokens(Instant.now());
+        int deleted;
+        do {
+            deleted = refreshTokenRepository.deleteExpiredTokensBatch(Instant.now(), CLEANUP_BATCH_SIZE);
+        } while (deleted == CLEANUP_BATCH_SIZE);
     }
 
     private String generateRawToken() {
