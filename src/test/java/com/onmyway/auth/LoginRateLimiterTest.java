@@ -69,7 +69,7 @@ class LoginRateLimiterTest {
 
         assertThatCode(() -> {
             LoginRateLimiter.Attempt third = limiter.reserveAttempt("192.0.2.22", "third@example.com");
-            limiter.recordSuccess(third);
+            limiter.recordFailure(third);
         }).doesNotThrowAnyException();
 
         for (int i = 0; i < 19; i++) {
