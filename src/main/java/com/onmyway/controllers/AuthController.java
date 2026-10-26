@@ -4,6 +4,7 @@ import com.onmyway.auth.AuthService;
 import com.onmyway.auth.ClientIpAddressResolver;
 import com.onmyway.auth.InvalidAuthenticationException;
 import com.onmyway.auth.LoginRateLimiter;
+import com.onmyway.auth.TurnstileCaptchaVerifier;
 import com.onmyway.auth.api.CurrentUserResponse;
 import com.onmyway.auth.api.LoginRequest;
 import com.onmyway.auth.api.LoginResponse;
@@ -26,12 +27,15 @@ public class AuthController {
     private final AuthService authService;
     private final LoginRateLimiter loginRateLimiter;
     private final ClientIpAddressResolver clientIpAddressResolver;
+    private final TurnstileCaptchaVerifier captchaVerifier;
 
     public AuthController(AuthService authService, LoginRateLimiter loginRateLimiter,
-                          ClientIpAddressResolver clientIpAddressResolver) {
+                          ClientIpAddressResolver clientIpAddressResolver,
+                          TurnstileCaptchaVerifier captchaVerifier) {
         this.authService = authService;
         this.loginRateLimiter = loginRateLimiter;
         this.clientIpAddressResolver = clientIpAddressResolver;
+        this.captchaVerifier = captchaVerifier;
     }
 
     @PostMapping("/register")
@@ -46,6 +50,10 @@ public class AuthController {
         LoginRateLimiter.Attempt attempt = loginRateLimiter.reserveAttempt(ipAddress, email);
         try {
             loginRateLimiter.applyDelay(attempt);
+            if (attempt.requiresAdditionalVerification() && captchaVerifier.isConfigured()
+                    && !captchaVerifier.verify(request == null ? null : request.captchaToken(), ipAddress)) {
+                throw new InvalidAuthenticationException("Invalid email or password");
+            }
             LoginResponse response = authService.login(request);
             loginRateLimiter.recordSuccess(attempt);
             return ResponseEntity.ok(response);
