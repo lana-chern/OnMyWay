@@ -122,8 +122,6 @@ class AuthServiceTest {
     @Test
     void rejectsInvalidCredentials() {
         LoginRequest request = new LoginRequest("test@example.com", "wrong-password", null);
-        User user = user("test@example.com", "encoded-password", "Alice", UserStatus.ACTIVE);
-        when(userRepository.findByEmailIgnoreCase("test@example.com")).thenReturn(java.util.Optional.of(user));
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
                 .thenThrow(mock(AuthenticationException.class));
         assertThatThrownBy(() -> authService.login(request))
@@ -134,8 +132,6 @@ class AuthServiceTest {
     @Test
     void rejectsInactiveUser() {
         LoginRequest request = new LoginRequest("test@example.com", "password123", null);
-        User user = user("test@example.com", "encoded-password", "Alice", UserStatus.BLOCKED);
-        when(userRepository.findByEmailIgnoreCase("test@example.com")).thenReturn(java.util.Optional.of(user));
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
                 .thenThrow(mock(AuthenticationException.class));
         assertThatThrownBy(() -> authService.login(request))
