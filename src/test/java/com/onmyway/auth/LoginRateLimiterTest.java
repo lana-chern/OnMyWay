@@ -94,7 +94,7 @@ class LoginRateLimiterTest {
 
         // The same overflow IP continues using its bucket, so failures cannot be reset
         // by asking for a new email while the primary store is full.
-        for (int i = 1; i < 19; i++) {
+        for (int i = 1; i < 20; i++) {
             LoginRateLimiter.Attempt attempt = limiter.reserveAttempt("192.0.2.32", "other" + i + "@example.com");
             limiter.recordFailure(attempt);
         }
