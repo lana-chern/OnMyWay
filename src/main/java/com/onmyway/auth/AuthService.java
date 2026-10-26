@@ -10,10 +10,13 @@ import com.onmyway.data.entities.UserStatus;
 import com.onmyway.data.repositories.UserRepository;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import java.util.Set;
 
@@ -23,15 +26,18 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
+    private final RefreshTokenService refreshTokenService;
 
     public AuthService(UserRepository userRepository,
                        PasswordEncoder passwordEncoder,
                        AuthenticationManager authenticationManager,
-                       JwtService jwtService) {
+                       JwtService jwtService,
+                       RefreshTokenService refreshTokenService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.authenticationManager = authenticationManager;
         this.jwtService = jwtService;
+        this.refreshTokenService = refreshTokenService;
     }
 
     public CurrentUserResponse register(RegisterRequest request) {
@@ -46,36 +52,62 @@ public class AuthService {
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         user.setDisplayName(request.displayName().trim());
         user.getRoles().add(role);
-        user = userRepository.save(user);
+        try {
+            user = userRepository.save(user);
+        } catch (DataIntegrityViolationException exception) {
+            // The unique database constraint also protects against concurrent registrations.
+            throw new IllegalArgumentException("Email is already registered", exception);
+        }
         return toResponse(user);
     }
 
     public LoginResponse login(LoginRequest request) {
         validateLoginRequest(request);
         String email = request.email().trim().toLowerCase(Locale.ROOT);
-        User user = userRepository.findByEmailIgnoreCase(email)
-                .orElseThrow(() -> new IllegalArgumentException("Invalid email or password"));
 
-        if (user.getStatus() != UserStatus.ACTIVE) {
-            throw new IllegalArgumentException("User account is not active");
-        }
-
+        Authentication authentication;
         try {
-            authenticationManager.authenticate(
+            authentication = authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(email, request.password())
             );
         } catch (AuthenticationException exception) {
-            throw new IllegalArgumentException("Invalid email or password");
+            // The authentication provider also performs a password-hash check for unknown users.
+            // Keep the external response identical for unknown emails, bad passwords and disabled accounts.
+            throw new InvalidAuthenticationException("Invalid email or password");
         }
 
-        return new LoginResponse(jwtService.generateToken(user.getId()), toResponse(user));
+        if (!(authentication.getPrincipal() instanceof OnMyWayUserDetails principal)) {
+            throw new InvalidAuthenticationException("Invalid email or password");
+        }
+        User user = userRepository.findById(principal.getId())
+                .orElseThrow(() -> new InvalidAuthenticationException("Invalid email or password"));
+
+        return new LoginResponse(
+                jwtService.generateToken(user.getId()),
+                refreshTokenService.issue(user),
+                toResponse(user)
+        );
+    }
+
+    public LoginResponse refresh(String rawRefreshToken) {
+        RefreshTokenService.RefreshGrant grant = refreshTokenService.rotate(rawRefreshToken);
+        User user = grant.user();
+        return new LoginResponse(
+                jwtService.generateToken(user.getId()),
+                grant.refreshToken(),
+                toResponse(user)
+        );
+    }
+
+    public void logout(String rawRefreshToken) {
+        refreshTokenService.revoke(rawRefreshToken);
     }
 
     public CurrentUserResponse currentUser(String email) {
         User user = userRepository.findByEmailIgnoreCase(email)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
         if (user.getStatus() != UserStatus.ACTIVE) {
-            throw new IllegalArgumentException("User account is not active");
+            throw new InvalidAuthenticationException("User account is not active");
         }
         return toResponse(user);
     }
@@ -87,10 +119,17 @@ public class AuthService {
         if (request.email() == null || request.email().isBlank()) {
             throw new IllegalArgumentException("Email is required");
         }
+        String normalizedEmail = request.email().trim();
+        if (normalizedEmail.length() > 320 || !normalizedEmail.matches("(?i)^[A-Z0-9.!#$%&'*+/=?^_\u0060{|}~-]+@[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?(?:\\.[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?)+$")) {
+            throw new IllegalArgumentException("Email must be a valid email address");
+        }
         if (request.password() == null || request.password().length() < 8) {
             throw new IllegalArgumentException("Password must contain at least 8 characters");
         }
-        if (request.displayName() == null || request.displayName().isBlank() || request.displayName().length() > 100) {
+        if (request.password().getBytes(StandardCharsets.UTF_8).length > 72) {
+            throw new IllegalArgumentException("Password must not exceed 72 UTF-8 bytes");
+        }
+        if (request.displayName() == null || request.displayName().trim().isEmpty() || request.displayName().trim().length() > 100) {
             throw new IllegalArgumentException("Display name is required and must be at most 100 characters");
         }
         return registrationRole(request.accountType());
@@ -113,8 +152,15 @@ public class AuthService {
         if (request.email() == null || request.email().isBlank()) {
             throw new IllegalArgumentException("Email is required");
         }
-        if (request.password() == null || request.password().isBlank()) {
+        String normalizedEmail = request.email().trim();
+        if (normalizedEmail.length() > 320 || !normalizedEmail.matches("(?i)^[A-Z0-9.!#$%&'*+/=?^_\u0060{|}~-]+@[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?(?:\\.[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?)+$")) {
+            throw new IllegalArgumentException("Email must be a valid email address");
+        }
+        if (request.password() == null || request.password().isEmpty()) {
             throw new IllegalArgumentException("Password is required");
+        }
+        if (request.password().getBytes(StandardCharsets.UTF_8).length > 72) {
+            throw new IllegalArgumentException("Password must not exceed 72 UTF-8 bytes");
         }
     }
 

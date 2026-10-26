@@ -7,6 +7,8 @@ public record LoginRequest(
         @Schema(description = "Email address associated with the account.", example = "organizer@example.com")
         String email,
         @Schema(description = "Account password.", format = "password", example = "your-password")
-        String password
+        String password,
+        @Schema(description = "Cloudflare Turnstile response token, required after suspicious login activity.", example = "0.xxxxx")
+        String captchaToken
 ) {
 }

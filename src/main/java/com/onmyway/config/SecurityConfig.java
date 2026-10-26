@@ -27,17 +27,21 @@ public class SecurityConfig {
                 .exceptionHandling(exceptionHandling -> exceptionHandling
                         .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
                 .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                        .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html", "/hello").permitAll()
                         .requestMatchers("/api/auth/me").authenticated()
-                        .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers(
+                                org.springframework.http.HttpMethod.POST,
+                                "/api/auth/register", "/api/auth/login", "/api/auth/refresh", "/api/auth/logout"
+                        ).permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/cities", "/api/cities/{id}").permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/places", "/api/places/{id}").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/places").hasRole("ORGANIZER")
                         .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/places/{id}/submit-for-moderation").hasRole("ORGANIZER")
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/places/{id}/manage").hasAnyRole("ORGANIZER", "MODERATOR", "ADMIN")
                         .requestMatchers("/api/moderation/**").hasAnyRole("MODERATOR", "ADMIN")
                         .requestMatchers(org.springframework.http.HttpMethod.PUT, "/api/places/{id}").hasAnyRole("ORGANIZER", "MODERATOR", "ADMIN")
                         .requestMatchers(org.springframework.http.HttpMethod.DELETE, "/api/places/{id}").hasAnyRole("ORGANIZER", "ADMIN")
-                        .requestMatchers("/api/**").permitAll()
-                        .anyRequest().permitAll()
+                        .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();
