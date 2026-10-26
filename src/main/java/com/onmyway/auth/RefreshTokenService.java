@@ -6,6 +6,7 @@ import com.onmyway.data.entities.UserStatus;
 import com.onmyway.data.repositories.RefreshTokenRepository;
 import com.onmyway.data.repositories.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -85,6 +86,19 @@ public class RefreshTokenService {
                     token.revoke(Instant.now());
                     refreshTokenRepository.save(token);
                 });
+    }
+
+    /**
+     * Removes expired tokens in batches at the database level. Revoked tokens are retained
+     * until their original expiry, then removed by the same cleanup.
+     */
+    @Scheduled(
+            fixedDelayString = "${omw.auth.refresh-token-cleanup-interval-ms:86400000}",
+            initialDelayString = "${omw.auth.refresh-token-cleanup-initial-delay-ms:60000}"
+    )
+    @Transactional
+    public void cleanupExpiredTokens() {
+        refreshTokenRepository.deleteExpiredTokens(Instant.now());
     }
 
     private String generateRawToken() {
