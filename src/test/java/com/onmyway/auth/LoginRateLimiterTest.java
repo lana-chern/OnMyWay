@@ -36,18 +36,17 @@ class LoginRateLimiterTest {
     }
 
     @Test
-    void concurrentInFlightAttemptsCannotExceedEmailLimit() {
+    void concurrentInFlightAttemptsCannotExceedIpLimit() {
         LoginRateLimiter limiter = new LoginRateLimiter();
-        for (int i = 0; i < 4; i++) {
-            LoginRateLimiter.Attempt attempt = limiter.reserveAttempt("192.0.2.12", "person@example.com");
-            limiter.recordFailure(attempt);
+        java.util.List<LoginRateLimiter.Attempt> attempts = new java.util.ArrayList<>();
+        for (int i = 0; i < 20; i++) {
+            attempts.add(limiter.reserveAttempt("192.0.2.12", "person" + i + "@example.com"));
         }
 
-        LoginRateLimiter.Attempt fifth = limiter.reserveAttempt("192.0.2.12", "person@example.com");
-        assertThatThrownBy(() -> limiter.reserveAttempt("192.0.2.12", "person@example.com"))
+        assertThatThrownBy(() -> limiter.reserveAttempt("192.0.2.12", "another@example.com"))
                 .isInstanceOf(TooManyLoginAttemptsException.class);
 
-        limiter.recordSuccess(fifth);
+        attempts.forEach(limiter::recordSuccess);
         assertThatCode(() -> {
             LoginRateLimiter.Attempt attempt = limiter.reserveAttempt("192.0.2.12", "person@example.com");
             limiter.recordSuccess(attempt);
