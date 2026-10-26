@@ -49,7 +49,7 @@ public class LoginRateLimiter {
         // window expires. This prevents an overflowed IP from switching back to a fresh counter.
         boolean useOverflow = isActive(overflowIpAttempts[overflowBucket], now);
         AttemptWindow knownIpWindow = attempts.get(requestedIpKey);
-        if (!useOverflow && knownIpWindow != null && isLimited(requestedIpKey, MAX_IP_FAILURES, now)) {
+        if (knownIpWindow != null && isLimited(requestedIpKey, MAX_IP_FAILURES, now)) {
             log.warn("Login rate limit reached for hashed IP key {}", safeKey(requestedIpKey));
             throw new TooManyLoginAttemptsException();
         }
