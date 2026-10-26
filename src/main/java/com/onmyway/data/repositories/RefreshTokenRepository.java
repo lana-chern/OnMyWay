@@ -14,7 +14,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long> {
-    Optional<RefreshToken> findByTokenHash(String tokenHash);
+    @Query("select token.familyId from RefreshToken token where token.tokenHash = :tokenHash")
+    Optional<UUID> findFamilyIdByTokenHash(@Param("tokenHash") String tokenHash);
 
     /**
      * Serializes refresh-token operations within one family. The transaction-scoped lock
