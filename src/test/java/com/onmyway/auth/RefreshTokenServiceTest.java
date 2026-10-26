@@ -36,6 +36,13 @@ class RefreshTokenServiceTest {
         verify(refreshTokenRepository, never()).save(any(RefreshToken.class));
     }
 
+    @Test
+    void cleanupDeletesTokensExpiredAtCurrentTime() {
+        service.cleanupExpiredTokens();
+
+        verify(refreshTokenRepository).deleteExpiredTokens(any(Instant.class));
+    }
+
     private User activeUser() {
         User user = new User();
         user.setId(1L);
