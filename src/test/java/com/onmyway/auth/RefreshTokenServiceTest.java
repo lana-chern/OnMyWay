@@ -30,8 +30,8 @@ class RefreshTokenServiceTest {
     void rejectsExpiredRefreshToken() {
         User user = activeUser();
         RefreshToken expiredToken = new RefreshToken(user, "stored-hash", Instant.now().minusSeconds(1));
-        when(refreshTokenRepository.findByTokenHash(anyString()))
-                .thenReturn(Optional.of(expiredToken));
+        when(refreshTokenRepository.findFamilyIdByTokenHash(anyString()))
+                .thenReturn(Optional.of(expiredToken.getFamilyId()));
         when(refreshTokenRepository.findByTokenHashForUpdate(anyString()))
                 .thenReturn(Optional.of(expiredToken));
 
@@ -51,8 +51,8 @@ class RefreshTokenServiceTest {
         RefreshToken currentToken = new RefreshToken(
                 user, "stored-hash", Instant.now().plusSeconds(60), familyId
         );
-        when(refreshTokenRepository.findByTokenHash(anyString()))
-                .thenReturn(Optional.of(currentToken));
+        when(refreshTokenRepository.findFamilyIdByTokenHash(anyString()))
+                .thenReturn(Optional.of(currentToken.getFamilyId()));
         when(refreshTokenRepository.findByTokenHashForUpdate(anyString()))
                 .thenReturn(Optional.of(currentToken));
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
@@ -78,8 +78,8 @@ class RefreshTokenServiceTest {
                 user, "stored-hash", Instant.now().plusSeconds(60), familyId
         );
         replayedToken.revoke(Instant.now());
-        when(refreshTokenRepository.findByTokenHash(anyString()))
-                .thenReturn(Optional.of(replayedToken));
+        when(refreshTokenRepository.findFamilyIdByTokenHash(anyString()))
+                .thenReturn(Optional.of(replayedToken.getFamilyId()));
         when(refreshTokenRepository.findByTokenHashForUpdate(anyString()))
                 .thenReturn(Optional.of(replayedToken));
         when(refreshTokenRepository.revokeActiveTokensByFamilyId(eq(familyId), any(Instant.class)))
