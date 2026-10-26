@@ -12,6 +12,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 class RefreshTokenServiceTest {
@@ -37,10 +38,14 @@ class RefreshTokenServiceTest {
     }
 
     @Test
-    void cleanupDeletesTokensExpiredAtCurrentTime() {
+    void cleanupContinuesUntilLastBatchIsSmallerThanBatchSize() {
+        when(refreshTokenRepository.deleteExpiredTokensBatch(any(Instant.class), eq(500)))
+                .thenReturn(500, 3);
+
         service.cleanupExpiredTokens();
 
-        verify(refreshTokenRepository).deleteExpiredTokens(any(Instant.class));
+        verify(refreshTokenRepository, times(2))
+                .deleteExpiredTokensBatch(any(Instant.class), eq(500));
     }
 
     private User activeUser() {
