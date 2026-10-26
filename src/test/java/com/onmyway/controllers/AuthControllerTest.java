@@ -257,6 +257,15 @@ class AuthControllerTest {
     void progressivelyDelaysRepeatedLoginAttemptsForUnknownEmailWithoutHardLockout() throws Exception {
         for (int i = 0; i < 5; i++) {
             mockMvc.perform(post("/api/auth/login")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {"email":"rate-limit-unknown@example.com","password":"wrong-password"}
+                                    """))
+                    .andExpect(status().isUnauthorized())
+                    .andExpect(jsonPath("$.detail").value("Invalid email or password"));
+        }
+
+        mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"email":"rate-limit-unknown@example.com","password":"wrong-password"}
@@ -264,7 +273,6 @@ class AuthControllerTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.detail").value("Invalid email or password"));
     }
-
     @Test
     void concurrentRegistrationWithSameEmailCreatesOnlyOneUser() throws Exception {
         String body = """
