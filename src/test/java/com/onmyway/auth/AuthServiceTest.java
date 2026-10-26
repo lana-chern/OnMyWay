@@ -16,6 +16,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
@@ -64,7 +66,9 @@ class AuthServiceTest {
     void logsInWithValidCredentialsAndGeneratesTokenUsingUserId() {
         LoginRequest request = new LoginRequest("  Test@Example.COM  ", "password123", null);
         User user = user("test@example.com", "encoded-password", "Alice", UserStatus.ACTIVE);
-        when(userRepository.findByEmailIgnoreCase("test@example.com")).thenReturn(java.util.Optional.of(user));
+        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
+                .thenReturn(authenticatedUser(user));
+        when(userRepository.findById(1L)).thenReturn(java.util.Optional.of(user));
         when(jwtService.generateToken(1L)).thenReturn("jwt-token");
         when(refreshTokenService.issue(user)).thenReturn("refresh-token");
         LoginResponse response = authService.login(request);
@@ -76,6 +80,17 @@ class AuthServiceTest {
         verify(authenticationManager).authenticate(any(UsernamePasswordAuthenticationToken.class));
         verify(jwtService).generateToken(1L);
         verify(refreshTokenService).issue(user);
+    }
+
+    private Authentication authenticatedUser(User user) {
+        OnMyWayUserDetails principal = new OnMyWayUserDetails(
+                user.getId(),
+                user.getEmail(),
+                user.getPasswordHash(),
+                Set.of(new SimpleGrantedAuthority("ROLE_USER")),
+                true
+        );
+        return new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
     }
 
     @Test
@@ -130,12 +145,14 @@ class AuthServiceTest {
     }
 
     @Test
-    void rejectsUnknownEmail() {
+    void rejectsUnknownEmailAfterAuthenticationProviderChecksCredentials() {
         LoginRequest request = new LoginRequest("unknown@example.com", "password123", null);
-        when(userRepository.findByEmailIgnoreCase("unknown@example.com")).thenReturn(java.util.Optional.empty());
+        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
+                .thenThrow(mock(AuthenticationException.class));
         assertThatThrownBy(() -> authService.login(request))
                 .isInstanceOf(InvalidAuthenticationException.class).hasMessage("Invalid email or password");
-        verifyNoInteractions(authenticationManager, jwtService);
+        verify(authenticationManager).authenticate(any(UsernamePasswordAuthenticationToken.class));
+        verifyNoInteractions(jwtService);
     }
 
     @Test
