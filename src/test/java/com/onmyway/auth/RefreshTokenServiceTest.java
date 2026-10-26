@@ -96,6 +96,43 @@ class RefreshTokenServiceTest {
     }
 
     @Test
+    void logoutRevokesAllActiveTokensInTheRefreshTokenFamily() {
+        UUID familyId = UUID.randomUUID();
+        when(refreshTokenRepository.findFamilyIdByTokenHash(anyString()))
+                .thenReturn(Optional.of(familyId));
+
+        service.revoke("refresh-token");
+
+        org.mockito.InOrder order = inOrder(refreshTokenRepository);
+        order.verify(refreshTokenRepository).findFamilyIdByTokenHash(anyString());
+        order.verify(refreshTokenRepository).lockFamily(familyId);
+        order.verify(refreshTokenRepository)
+                .revokeActiveTokensByFamilyId(eq(familyId), any(Instant.class));
+        verify(refreshTokenRepository, never()).findByTokenHashForUpdate(anyString());
+        verify(refreshTokenRepository, never()).save(any(RefreshToken.class));
+    }
+
+    @Test
+    void logoutWithUnknownRefreshTokenDoesNothing() {
+        when(refreshTokenRepository.findFamilyIdByTokenHash(anyString()))
+                .thenReturn(Optional.empty());
+
+        service.revoke("unknown-token");
+
+        verify(refreshTokenRepository).findFamilyIdByTokenHash(anyString());
+        verify(refreshTokenRepository, never()).lockFamily(any(UUID.class));
+        verify(refreshTokenRepository, never())
+                .revokeActiveTokensByFamilyId(any(UUID.class), any(Instant.class));
+    }
+
+    @Test
+    void logoutWithBlankRefreshTokenDoesNotQueryRepository() {
+        service.revoke("  ");
+
+        verifyNoInteractions(refreshTokenRepository);
+    }
+
+    @Test
     void cleanupContinuesUntilLastBatchIsSmallerThanBatchSize() {
         when(refreshTokenRepository.deleteExpiredTokensBatch(any(Instant.class), eq(500)))
                 .thenReturn(500, 3);
