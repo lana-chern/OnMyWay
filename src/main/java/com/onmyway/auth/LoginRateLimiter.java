@@ -54,7 +54,9 @@ public class LoginRateLimiter {
         }
         emailWindow.inFlight++;
         ipWindow.inFlight++;
-        return new Attempt(emailKey, ipKey, emailWindow.startedAt, ipWindow.startedAt, delayMillis);
+        boolean requiresAdditionalVerification = emailWindow.failures >= SUSPICIOUS_EMAIL_FAILURES
+                || ipWindow.failures >= SUSPICIOUS_IP_FAILURES;
+        return new Attempt(emailKey, ipKey, emailWindow.startedAt, ipWindow.startedAt, delayMillis, requiresAdditionalVerification);
     }
 
     public void applyDelay(Attempt attempt) {
@@ -134,12 +136,16 @@ public class LoginRateLimiter {
     public static final class Attempt {
         private final String emailKey, ipKey;
         private final long emailWindowStartedAt, ipWindowStartedAt, delayMillis;
-        private Attempt(String emailKey, String ipKey, long emailWindowStartedAt, long ipWindowStartedAt, long delayMillis) {
+        private final boolean requiresAdditionalVerification;
+        private Attempt(String emailKey, String ipKey, long emailWindowStartedAt, long ipWindowStartedAt,
+                        long delayMillis, boolean requiresAdditionalVerification) {
             this.emailKey = emailKey; this.ipKey = ipKey;
             this.emailWindowStartedAt = emailWindowStartedAt; this.ipWindowStartedAt = ipWindowStartedAt;
             this.delayMillis = delayMillis;
+            this.requiresAdditionalVerification = requiresAdditionalVerification;
         }
         public long delayMillis() { return delayMillis; }
+        public boolean requiresAdditionalVerification() { return requiresAdditionalVerification; }
     }
 
     private static final class AttemptWindow {
