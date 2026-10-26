@@ -26,10 +26,10 @@ class PostgresMigrationTest {
             Flyway flyway = flyway(schema);
             var result = flyway.migrate();
 
-            assertEquals(5, result.migrationsExecuted);
+            assertEquals(6, result.migrationsExecuted);
             assertColumnExists(schema, "places", "owner_id");
             assertEquals(5L, queryLong(schema,
-                    "SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE AND version IN ('1', '2', '3', '4', '5')"));
+                    "SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE AND version IN ('1', '2', '3', '4', '5', '6')"));
             assertEquals(0L, queryLong(schema, "SELECT COUNT(*) FROM users WHERE email = '" + LEGACY_EMAIL + "'"));
             assertTrue(hasConstraint(schema, "places", "fk_places_owner"));
             assertTrue(hasIndex(schema, "idx_places_owner_id"));
@@ -57,7 +57,7 @@ class PostgresMigrationTest {
 
             var result = flyway(schema).migrate();
 
-            assertEquals(4, result.migrationsExecuted, "V2, V3, V4, and V5 should run after baseline V1");
+            assertEquals(5, result.migrationsExecuted, "V2 through V6 should run after baseline V1");
             assertColumnExists(schema, "places", "owner_id");
             assertColumnIsNotNull(schema, "places", "owner_id");
             assertTrue(hasConstraint(schema, "places", "fk_places_owner"));
@@ -83,6 +83,11 @@ class PostgresMigrationTest {
                     SELECT COUNT(*) FROM information_schema.tables
                     WHERE table_schema = '%s' AND table_name = 'refresh_tokens'
                     """.formatted(schema)));
+            assertColumnExists(schema, "refresh_tokens", "family_id");
+            assertColumnIsNotNull(schema, "refresh_tokens", "family_id");
+            assertTrue(hasIndex(schema, "idx_refresh_tokens_family_id"));
+            assertEquals(1L, queryLong(schema,
+                    "SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE AND version = '6'"));
         });
     }
 
