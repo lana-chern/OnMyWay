@@ -11,11 +11,24 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.Optional;
+import java.util.UUID;
 
 public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select token from RefreshToken token where token.tokenHash = :tokenHash")
     Optional<RefreshToken> findByTokenHashForUpdate(@Param("tokenHash") String tokenHash);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update RefreshToken token
+            set token.revokedAt = :revokedAt
+            where token.familyId = :familyId
+              and token.revokedAt is null
+            """)
+    int revokeActiveTokensByFamilyId(
+            @Param("familyId") UUID familyId,
+            @Param("revokedAt") Instant revokedAt
+    );
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Transactional
