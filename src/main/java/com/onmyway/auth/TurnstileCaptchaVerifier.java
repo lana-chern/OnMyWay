@@ -17,9 +17,8 @@ public class TurnstileCaptchaVerifier {
     private final RestClient restClient;
     private final String secret;
 
-    public TurnstileCaptchaVerifier(RestClient.Builder builder,
-            @Value("${omw.auth.turnstile-secret:}") String secret) {
-        this.restClient = builder.build();
+    public TurnstileCaptchaVerifier(@Value("${omw.auth.turnstile-secret:}") String secret) {
+        this.restClient = RestClient.create();
         this.secret = secret == null ? "" : secret.trim();
         if (this.secret.isEmpty()) log.warn("Turnstile CAPTCHA is not configured; step-up verification is disabled until OMW_AUTH_TURNSTILE_SECRET is set");
     }
