@@ -8,9 +8,11 @@ import com.onmyway.data.repositories.UserRepository;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -38,6 +40,29 @@ class RefreshTokenServiceTest {
         verifyNoInteractions(userRepository);
         verify(refreshTokenRepository, never()).save(any(RefreshToken.class));
         verify(refreshTokenRepository, never()).revokeActiveTokensByFamilyId(any(UUID.class), any(Instant.class));
+    }
+
+    @Test
+    void rotationPreservesTheTokenFamily() {
+        User user = activeUser();
+        UUID familyId = UUID.randomUUID();
+        RefreshToken currentToken = new RefreshToken(
+                user, "stored-hash", Instant.now().plusSeconds(60), familyId
+        );
+        when(refreshTokenRepository.findByTokenHashForUpdate(anyString()))
+                .thenReturn(Optional.of(currentToken));
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+
+        service.rotate("current-token");
+
+        org.mockito.ArgumentCaptor<RefreshToken> tokenCaptor =
+                org.mockito.ArgumentCaptor.forClass(RefreshToken.class);
+        verify(refreshTokenRepository, times(2)).save(tokenCaptor.capture());
+        List<RefreshToken> savedTokens = tokenCaptor.getAllValues();
+
+        assertThat(savedTokens.get(0).getRevokedAt()).isNotNull();
+        assertThat(savedTokens).allSatisfy(token ->
+                assertThat(token.getFamilyId()).isEqualTo(familyId));
     }
 
     @Test
