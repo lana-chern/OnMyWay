@@ -35,7 +35,18 @@ public class ClientIpAddressResolver {
             return remoteAddress;
         }
 
-        String clientAddress = forwardedFor.split(",", 2)[0].trim();
-        return clientAddress.isEmpty() ? remoteAddress : clientAddress;
+        // Walk from the application-facing proxy toward the client. Any values to the
+        // left of the first untrusted address may have been supplied by the client.
+        String[] addresses = forwardedFor.split(",");
+        for (int i = addresses.length - 1; i >= 0; i--) {
+            String address = addresses[i].trim();
+            if (address.isEmpty()) {
+                continue;
+            }
+            if (!trustedProxyAddresses.contains(address)) {
+                return address;
+            }
+        }
+        return remoteAddress;
     }
 }
