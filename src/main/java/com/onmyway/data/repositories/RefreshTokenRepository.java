@@ -14,6 +14,15 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long> {
+    Optional<RefreshToken> findByTokenHash(String tokenHash);
+
+    /**
+     * Serializes refresh-token operations within one family. The transaction-scoped lock
+     * is released automatically when the surrounding service transaction completes.
+     */
+    @Query(value = "select pg_advisory_xact_lock(hashtext(cast(:familyId as text))) is null", nativeQuery = true)
+    boolean lockFamily(@Param("familyId") UUID familyId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select token from RefreshToken token where token.tokenHash = :tokenHash")
     Optional<RefreshToken> findByTokenHashForUpdate(@Param("tokenHash") String tokenHash);
