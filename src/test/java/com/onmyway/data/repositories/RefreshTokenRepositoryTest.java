@@ -9,6 +9,7 @@ import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -57,6 +58,30 @@ class RefreshTokenRepositoryTest {
 
         assertThat(refreshTokenRepository.deleteExpiredTokensBatch(Instant.now(), 2)).isEqualTo(1);
         assertThat(refreshTokenRepository.count()).isZero();
+    }
+
+    @Test
+    void revokesOnlyActiveTokensFromTheRequestedFamily() {
+        User user = userRepository.saveAndFlush(testUser("refresh-family@example.com"));
+        UUID compromisedFamily = UUID.randomUUID();
+        UUID independentFamily = UUID.randomUUID();
+        Instant expiry = Instant.now().plusSeconds(600);
+
+        RefreshToken oldToken = new RefreshToken(user, "a".repeat(64), expiry, compromisedFamily);
+        oldToken.revoke(Instant.now().minusSeconds(1));
+        RefreshToken activeDescendant = new RefreshToken(user, "b".repeat(64), expiry, compromisedFamily);
+        RefreshToken independentSession = new RefreshToken(user, "c".repeat(64), expiry, independentFamily);
+        refreshTokenRepository.saveAndFlush(oldToken);
+        refreshTokenRepository.saveAndFlush(activeDescendant);
+        refreshTokenRepository.saveAndFlush(independentSession);
+
+        int revoked = refreshTokenRepository.revokeActiveTokensByFamilyId(compromisedFamily, Instant.now());
+        refreshTokenRepository.flush();
+
+        assertThat(revoked).isEqualTo(1);
+        assertThat(refreshTokenRepository.findById(oldToken.getId()).orElseThrow().getRevokedAt()).isNotNull();
+        assertThat(refreshTokenRepository.findById(activeDescendant.getId()).orElseThrow().getRevokedAt()).isNotNull();
+        assertThat(refreshTokenRepository.findById(independentSession.getId()).orElseThrow().getRevokedAt()).isNull();
     }
 
     private User testUser(String email) {
