@@ -37,14 +37,28 @@ OpenAPI specification: `http://localhost:8080/v3/api-docs`
 
 The OpenAPI document is generated from the Spring MVC controllers and includes JWT bearer authentication metadata. Documentation endpoints are public; protected API operations still enforce the existing role-based security rules.
 
+## Local Docker deployment
+
+Requirements: Docker Engine/Desktop with the Docker Compose plugin.
+
+1. Copy `.env.example` to `.env`.
+2. Set `POSTGRES_PASSWORD` to a local database password.
+3. Set `OMW_JWT_SECRET` to a Base64-encoded cryptographic key of at least 32 bytes. Generate one with `openssl rand -base64 32`. Do not commit `.env`.
+4. Start the stack: `docker compose up --build -d`.
+5. Follow startup logs: `docker compose logs -f app`.
+6. Open Swagger UI at `http://localhost:8080/swagger-ui.html`.
+
+The API and PostgreSQL port are bound to localhost only. PostgreSQL data is stored in the named Docker volume `onmyway_postgres_data` and survives container recreation. To stop the stack without deleting data, run `docker compose down`. **Do not run `docker compose down -v` unless you intend to delete the local database volume.**
+
+To rebuild after code changes, run `docker compose up --build -d`. This local setup is intended for development and is not a production-hardened VPS configuration.
+
 ## Future Development
 
 Planned improvements include:
 
 - moderator permissions for other product areas and a fuller moderation workflow;
-- improved authentication and authorization flows;
-- refresh tokens and token revocation;
-- deployment configuration and production observability.
+- further authentication and authorization hardening;
+- VPS deployment, HTTPS, backups, and production observability.
 
 ---
 
@@ -82,6 +96,21 @@ OnMyWay — backend-приложение для поиска и управлен
 - Публичные эндпоинты возвращают только места со статусом `PUBLISHED`.
 - Модераторы могут редактировать неархивированные места, но не могут архивировать их через эндпоинт удаления. Организатор может архивировать собственные места, администратор — любые.
 
+## Локальный запуск через Docker
+
+Требования: установленный Docker Engine/Desktop и плагин Docker Compose.
+
+1. Скопируйте `.env.example` в файл `.env`.
+2. Задайте `POSTGRES_PASSWORD` — пароль локальной базы данных.
+3. Задайте `OMW_JWT_SECRET` — криптографический ключ в Base64 длиной не менее 32 байт. Его можно сгенерировать командой `openssl rand -base64 32`. Не добавляйте `.env` в Git.
+4. Запустите приложение и базу: `docker compose up --build -d`.
+5. Посмотрите логи приложения: `docker compose logs -f app`.
+6. Откройте Swagger UI: `http://localhost:8080/swagger-ui.html`.
+
+Порты API и PostgreSQL доступны только с локального компьютера. Данные PostgreSQL хранятся в именованном Docker volume `onmyway_postgres_data` и сохраняются при пересоздании контейнеров. Для остановки без удаления данных выполните `docker compose down`. **Не используйте `docker compose down -v`, если не хотите удалить локальную базу.**
+
+После изменений кода пересоберите приложение командой `docker compose up --build -d`. Эта конфигурация предназначена для локальной разработки, а не для production-развёртывания на VPS.
+
 ## Дальнейшее развитие
 
 В планах:
@@ -90,5 +119,5 @@ OnMyWay — backend-приложение для поиска и управлен
 - улучшение процессов аутентификации и авторизации;
 - документирование API с помощью OpenAPI/Swagger;
 - пагинация, фильтрация и сортировка поиска мест;
-- refresh-токены и механизм отзыва токенов;
-- конфигурация развёртывания и production-наблюдаемость.
+- дальнейшее усиление аутентификации и авторизации;
+- развёртывание на VPS, HTTPS, резервное копирование и production-наблюдаемость.
