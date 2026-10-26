@@ -10,6 +10,7 @@ import com.onmyway.data.entities.UserStatus;
 import com.onmyway.data.repositories.UserRepository;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -63,17 +64,23 @@ public class AuthService {
     public LoginResponse login(LoginRequest request) {
         validateLoginRequest(request);
         String email = request.email().trim().toLowerCase(Locale.ROOT);
-        User user = userRepository.findByEmailIgnoreCase(email)
-                .orElseThrow(() -> new InvalidAuthenticationException("Invalid email or password"));
 
+        Authentication authentication;
         try {
-            authenticationManager.authenticate(
+            authentication = authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(email, request.password())
             );
         } catch (AuthenticationException exception) {
-            // Keep the response identical for unknown emails, bad passwords and disabled accounts.
+            // The authentication provider also performs a password-hash check for unknown users.
+            // Keep the external response identical for unknown emails, bad passwords and disabled accounts.
             throw new InvalidAuthenticationException("Invalid email or password");
         }
+
+        if (!(authentication.getPrincipal() instanceof OnMyWayUserDetails principal)) {
+            throw new InvalidAuthenticationException("Invalid email or password");
+        }
+        User user = userRepository.findById(principal.getId())
+                .orElseThrow(() -> new InvalidAuthenticationException("Invalid email or password"));
 
         return new LoginResponse(
                 jwtService.generateToken(user.getId()),
@@ -113,7 +120,7 @@ public class AuthService {
             throw new IllegalArgumentException("Email is required");
         }
         String normalizedEmail = request.email().trim();
-        if (normalizedEmail.length() > 320 || !normalizedEmail.matches("(?i)^[A-Z0-9.!#$%&'*+/=?^_\u0060{|}~-]+@[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?(?:\\.[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?)+$")) {
+        if (normalizedEmail.length() > 320 || !normalizedEmail.matches("(?i)^[A-Z0-9.!#$%&'*+/=?^_\\u0060{|}~-]+@[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?(?:\\\\.[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?)+$")) {
             throw new IllegalArgumentException("Email must be a valid email address");
         }
         if (request.password() == null || request.password().length() < 8) {
@@ -146,7 +153,7 @@ public class AuthService {
             throw new IllegalArgumentException("Email is required");
         }
         String normalizedEmail = request.email().trim();
-        if (normalizedEmail.length() > 320 || !normalizedEmail.matches("(?i)^[A-Z0-9.!#$%&'*+/=?^_\u0060{|}~-]+@[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?(?:\\.[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?)+$")) {
+        if (normalizedEmail.length() > 320 || !normalizedEmail.matches("(?i)^[A-Z0-9.!#$%&'*+/=?^_\\u0060{|}~-]+@[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?(?:\\\\.[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?)+$")) {
             throw new IllegalArgumentException("Email must be a valid email address");
         }
         if (request.password() == null || request.password().isBlank()) {
