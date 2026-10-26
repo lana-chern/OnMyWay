@@ -6,8 +6,6 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-onmyway}
       POSTGRES_USER: ${POSTGRES_USER:-onmyway}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
-    ports:
-      - "127.0.0.1:5432:5432"
     volumes:
       - onmyway_postgres_data:/var/lib/postgresql/data
     healthcheck:
