@@ -62,7 +62,7 @@ class AuthServiceTest {
 
     @Test
     void logsInWithValidCredentialsAndGeneratesTokenUsingUserId() {
-        LoginRequest request = new LoginRequest("  Test@Example.COM  ", "password123");
+        LoginRequest request = new LoginRequest("  Test@Example.COM  ", "password123", null);
         User user = user("test@example.com", "encoded-password", "Alice", UserStatus.ACTIVE);
         when(userRepository.findByEmailIgnoreCase("test@example.com")).thenReturn(java.util.Optional.of(user));
         when(jwtService.generateToken(1L)).thenReturn("jwt-token");
@@ -106,7 +106,7 @@ class AuthServiceTest {
 
     @Test
     void rejectsInvalidCredentials() {
-        LoginRequest request = new LoginRequest("test@example.com", "wrong-password");
+        LoginRequest request = new LoginRequest("test@example.com", "wrong-password", null);
         User user = user("test@example.com", "encoded-password", "Alice", UserStatus.ACTIVE);
         when(userRepository.findByEmailIgnoreCase("test@example.com")).thenReturn(java.util.Optional.of(user));
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
@@ -118,7 +118,7 @@ class AuthServiceTest {
 
     @Test
     void rejectsInactiveUser() {
-        LoginRequest request = new LoginRequest("test@example.com", "password123");
+        LoginRequest request = new LoginRequest("test@example.com", "password123", null);
         User user = user("test@example.com", "encoded-password", "Alice", UserStatus.BLOCKED);
         when(userRepository.findByEmailIgnoreCase("test@example.com")).thenReturn(java.util.Optional.of(user));
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
@@ -131,7 +131,7 @@ class AuthServiceTest {
 
     @Test
     void rejectsUnknownEmail() {
-        LoginRequest request = new LoginRequest("unknown@example.com", "password123");
+        LoginRequest request = new LoginRequest("unknown@example.com", "password123", null);
         when(userRepository.findByEmailIgnoreCase("unknown@example.com")).thenReturn(java.util.Optional.empty());
         assertThatThrownBy(() -> authService.login(request))
                 .isInstanceOf(InvalidAuthenticationException.class).hasMessage("Invalid email or password");
@@ -140,14 +140,14 @@ class AuthServiceTest {
 
     @Test
     void rejectsBlankLoginEmail() {
-        LoginRequest request = new LoginRequest("   ", "password123");
+        LoginRequest request = new LoginRequest("   ", "password123", null);
         assertThatThrownBy(() -> authService.login(request))
                 .isInstanceOf(IllegalArgumentException.class).hasMessage("Email is required");
     }
 
     @Test
     void rejectsBlankLoginPassword() {
-        LoginRequest request = new LoginRequest("test@example.com", "   ");
+        LoginRequest request = new LoginRequest("test@example.com", "   ", null);
         assertThatThrownBy(() -> authService.login(request))
                 .isInstanceOf(IllegalArgumentException.class).hasMessage("Password is required");
     }
@@ -217,7 +217,7 @@ class AuthServiceTest {
 
     @Test
     void rejectsInvalidEmailFormatDuringLogin() {
-        LoginRequest request = new LoginRequest("not-an-email", "password123");
+        LoginRequest request = new LoginRequest("not-an-email", "password123", null);
         assertThatThrownBy(() -> authService.login(request))
                 .isInstanceOf(IllegalArgumentException.class).hasMessage("Email must be a valid email address");
         verifyNoInteractions(userRepository, authenticationManager);
@@ -225,7 +225,7 @@ class AuthServiceTest {
 
     @Test
     void rejectsPasswordLongerThanBcryptLimitDuringLogin() {
-        LoginRequest request = new LoginRequest("test@example.com", "p".repeat(73));
+        LoginRequest request = new LoginRequest("test@example.com", "p".repeat(73), null);
         assertThatThrownBy(() -> authService.login(request))
                 .isInstanceOf(IllegalArgumentException.class).hasMessage("Password must not exceed 72 UTF-8 bytes");
         verifyNoInteractions(userRepository, authenticationManager);
