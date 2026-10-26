@@ -81,6 +81,28 @@ class LoginRateLimiterTest {
     }
 
     @Test
+    void fullStoreUsesBoundedOverflowBucketsInsteadOfRejectingEveryNewIp() {
+        LoginRateLimiter limiter = new LoginRateLimiter(2);
+
+        LoginRateLimiter.Attempt first = limiter.reserveAttempt("192.0.2.30", "first@example.com");
+        limiter.recordFailure(first);
+        LoginRateLimiter.Attempt second = limiter.reserveAttempt("192.0.2.31", "second@example.com");
+        limiter.recordFailure(second);
+
+        LoginRateLimiter.Attempt overflow = limiter.reserveAttempt("192.0.2.32", "third@example.com");
+        limiter.recordFailure(overflow);
+
+        // The same overflow IP continues using its bucket, so failures cannot be reset
+        // by asking for a new email while the primary store is full.
+        for (int i = 1; i < 19; i++) {
+            LoginRateLimiter.Attempt attempt = limiter.reserveAttempt("192.0.2.32", "other" + i + "@example.com");
+            limiter.recordFailure(attempt);
+        }
+        assertThatThrownBy(() -> limiter.reserveAttempt("192.0.2.32", "blocked@example.com"))
+                .isInstanceOf(TooManyLoginAttemptsException.class);
+    }
+
+    @Test
     void successfulLoginDoesNotCountAsFailure() {
         LoginRateLimiter limiter = new LoginRateLimiter();
         for (int i = 0; i < 5; i++) {
