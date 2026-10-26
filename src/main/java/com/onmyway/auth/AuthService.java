@@ -120,7 +120,7 @@ public class AuthService {
             throw new IllegalArgumentException("Email is required");
         }
         String normalizedEmail = request.email().trim();
-        if (normalizedEmail.length() > 320 || !normalizedEmail.matches("(?i)^[A-Z0-9.!#$%&'*+/=?^_\\u0060{|}~-]+@[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?(?:\\\\.[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?)+$")) {
+        if (normalizedEmail.length() > 320 || !normalizedEmail.matches("(?i)^[A-Z0-9.!#$%&'*+/=?^_\u0060{|}~-]+@[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?(?:\\.[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?)+$")) {
             throw new IllegalArgumentException("Email must be a valid email address");
         }
         if (request.password() == null || request.password().length() < 8) {
@@ -153,7 +153,7 @@ public class AuthService {
             throw new IllegalArgumentException("Email is required");
         }
         String normalizedEmail = request.email().trim();
-        if (normalizedEmail.length() > 320 || !normalizedEmail.matches("(?i)^[A-Z0-9.!#$%&'*+/=?^_\\u0060{|}~-]+@[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?(?:\\\\.[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?)+$")) {
+        if (normalizedEmail.length() > 320 || !normalizedEmail.matches("(?i)^[A-Z0-9.!#$%&'*+/=?^_\u0060{|}~-]+@[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?(?:\\.[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?)+$")) {
             throw new IllegalArgumentException("Email must be a valid email address");
         }
         if (request.password() == null || request.password().isBlank()) {
