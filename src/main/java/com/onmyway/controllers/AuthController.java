@@ -45,6 +45,7 @@ public class AuthController {
         String ipAddress = clientIpAddressResolver.resolve(servletRequest);
         LoginRateLimiter.Attempt attempt = loginRateLimiter.reserveAttempt(ipAddress, email);
         try {
+            loginRateLimiter.applyDelay(attempt);
             LoginResponse response = authService.login(request);
             loginRateLimiter.recordSuccess(attempt);
             return ResponseEntity.ok(response);
