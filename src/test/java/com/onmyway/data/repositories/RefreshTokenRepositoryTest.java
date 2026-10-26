@@ -75,7 +75,7 @@ class RefreshTokenRepositoryTest {
         refreshTokenRepository.saveAndFlush(activeDescendant);
         refreshTokenRepository.saveAndFlush(independentSession);
 
-        assertThat(refreshTokenRepository.lockFamily(compromisedFamily)).isTrue();
+        assertThat(refreshTokenRepository.lockFamily(compromisedFamily)).hasSize(2);
 
         int revoked = refreshTokenRepository.revokeActiveTokensByFamilyId(compromisedFamily, Instant.now());
         refreshTokenRepository.flush();
