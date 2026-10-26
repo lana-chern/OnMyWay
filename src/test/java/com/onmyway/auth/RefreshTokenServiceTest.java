@@ -30,6 +30,8 @@ class RefreshTokenServiceTest {
     void rejectsExpiredRefreshToken() {
         User user = activeUser();
         RefreshToken expiredToken = new RefreshToken(user, "stored-hash", Instant.now().minusSeconds(1));
+        when(refreshTokenRepository.findByTokenHash(anyString()))
+                .thenReturn(Optional.of(expiredToken));
         when(refreshTokenRepository.findByTokenHashForUpdate(anyString()))
                 .thenReturn(Optional.of(expiredToken));
 
@@ -49,6 +51,8 @@ class RefreshTokenServiceTest {
         RefreshToken currentToken = new RefreshToken(
                 user, "stored-hash", Instant.now().plusSeconds(60), familyId
         );
+        when(refreshTokenRepository.findByTokenHash(anyString()))
+                .thenReturn(Optional.of(currentToken));
         when(refreshTokenRepository.findByTokenHashForUpdate(anyString()))
                 .thenReturn(Optional.of(currentToken));
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
@@ -63,6 +67,7 @@ class RefreshTokenServiceTest {
         assertThat(savedTokens.get(0).getRevokedAt()).isNotNull();
         assertThat(savedTokens).allSatisfy(token ->
                 assertThat(token.getFamilyId()).isEqualTo(familyId));
+        verify(refreshTokenRepository).lockFamily(familyId);
     }
 
     @Test
@@ -73,6 +78,8 @@ class RefreshTokenServiceTest {
                 user, "stored-hash", Instant.now().plusSeconds(60), familyId
         );
         replayedToken.revoke(Instant.now());
+        when(refreshTokenRepository.findByTokenHash(anyString()))
+                .thenReturn(Optional.of(replayedToken));
         when(refreshTokenRepository.findByTokenHashForUpdate(anyString()))
                 .thenReturn(Optional.of(replayedToken));
         when(refreshTokenRepository.revokeActiveTokensByFamilyId(eq(familyId), any(Instant.class)))
@@ -82,6 +89,7 @@ class RefreshTokenServiceTest {
                 .isInstanceOf(InvalidAuthenticationException.class)
                 .hasMessage("Invalid refresh token");
 
+        verify(refreshTokenRepository).lockFamily(familyId);
         verify(refreshTokenRepository).revokeActiveTokensByFamilyId(eq(familyId), any(Instant.class));
         verify(refreshTokenRepository, never()).save(any(RefreshToken.class));
         verifyNoInteractions(userRepository);
