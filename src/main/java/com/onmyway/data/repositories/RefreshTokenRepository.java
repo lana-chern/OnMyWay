@@ -10,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -18,11 +19,18 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
     Optional<UUID> findFamilyIdByTokenHash(@Param("tokenHash") String tokenHash);
 
     /**
-     * Serializes refresh-token operations within one family. The transaction-scoped lock
-     * is released automatically when the surrounding service transaction completes.
+     * Locks the existing rows in a family in a stable order. Every refresh operation
+     * references an existing token, so this serializes rotations and reuse detection
+     * without relying on database-specific advisory-lock functions.
      */
-    @Query(value = "select pg_advisory_xact_lock(hashtext(cast(:familyId as text))) is null", nativeQuery = true)
-    boolean lockFamily(@Param("familyId") UUID familyId);
+    @Query(value = """
+            select id
+            from refresh_tokens
+            where family_id = :familyId
+            order by id
+            for update
+            """, nativeQuery = true)
+    List<Long> lockFamily(@Param("familyId") UUID familyId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select token from RefreshToken token where token.tokenHash = :tokenHash")
