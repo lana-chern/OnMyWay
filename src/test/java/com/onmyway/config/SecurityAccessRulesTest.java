@@ -9,6 +9,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
@@ -23,9 +24,15 @@ class SecurityAccessRulesTest {
         mockMvc.perform(get("/api/cities"))
                 .andExpect(status().isOk());
 
-        // Missing cityId proves the request reached MVC validation rather than being rejected by security.
         mockMvc.perform(get("/api/places"))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title").value("Missing request parameter"))
+                .andExpect(jsonPath("$.detail").value("Required request parameter 'cityId' is missing."));
+
+        mockMvc.perform(get("/api/places").param("cityId", "abc"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title").value("Invalid request parameter"))
+                .andExpect(jsonPath("$.detail").value("Request parameter 'cityId' has an invalid value."));
 
         mockMvc.perform(get("/hello"))
                 .andExpect(status().isOk());

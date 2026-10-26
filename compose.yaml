@@ -1,0 +1,40 @@
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-onmyway}
+      POSTGRES_USER: ${POSTGRES_USER:-onmyway}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - onmyway_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-onmyway} -d ${POSTGRES_DB:-onmyway}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      OMW_DB_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-onmyway}
+      OMW_DB_USERNAME: ${POSTGRES_USER:-onmyway}
+      OMW_DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      OMW_JWT_SECRET: ${OMW_JWT_SECRET:?Set OMW_JWT_SECRET in .env}
+      OMW_JWT_EXPIRATION_MS: ${OMW_JWT_EXPIRATION_MS:-900000}
+      OMW_AUTH_TRUSTED_PROXY_ADDRESSES: ${OMW_AUTH_TRUSTED_PROXY_ADDRESSES:-}
+      OMW_AUTH_TURNSTILE_SECRET: ${OMW_AUTH_TURNSTILE_SECRET:-}
+      OMW_AUTH_REFRESH_TOKEN_CLEANUP_INTERVAL_MS: ${OMW_AUTH_REFRESH_TOKEN_CLEANUP_INTERVAL_MS:-86400000}
+      OMW_AUTH_REFRESH_TOKEN_CLEANUP_INITIAL_DELAY_MS: ${OMW_AUTH_REFRESH_TOKEN_CLEANUP_INITIAL_DELAY_MS:-60000}
+    ports:
+      - "127.0.0.1:8080:8080"
+
+volumes:
+  onmyway_postgres_data:

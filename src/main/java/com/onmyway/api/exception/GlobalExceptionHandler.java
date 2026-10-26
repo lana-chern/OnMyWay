@@ -4,10 +4,11 @@ import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-import com.onmyway.api.exception.StalePlaceVersionException;
 import com.onmyway.auth.InvalidAuthenticationException;
 import com.onmyway.auth.TooManyLoginAttemptsException;
 
@@ -30,6 +31,26 @@ public class GlobalExceptionHandler {
                 .collect(Collectors.joining("; "));
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, detail);
         problem.setTitle("Validation failed");
+        return problem;
+    }
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    ProblemDetail handleMissingRequestParameter(MissingServletRequestParameterException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST,
+                "Required request parameter '%s' is missing.".formatted(exception.getParameterName())
+        );
+        problem.setTitle("Missing request parameter");
+        return problem;
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    ProblemDetail handleRequestParameterTypeMismatch(MethodArgumentTypeMismatchException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST,
+                "Request parameter '%s' has an invalid value.".formatted(exception.getName())
+        );
+        problem.setTitle("Invalid request parameter");
         return problem;
     }
 
