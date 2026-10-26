@@ -10,12 +10,43 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long> {
+    @Query("select token.familyId from RefreshToken token where token.tokenHash = :tokenHash")
+    Optional<UUID> findFamilyIdByTokenHash(@Param("tokenHash") String tokenHash);
+
+    /**
+     * Locks the existing rows in a family in a stable order. Every refresh operation
+     * references an existing token, so this serializes rotations and reuse detection
+     * without relying on database-specific advisory-lock functions.
+     */
+    @Query(value = """
+            select id
+            from refresh_tokens
+            where family_id = :familyId
+            order by id
+            for update
+            """, nativeQuery = true)
+    List<Long> lockFamily(@Param("familyId") UUID familyId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select token from RefreshToken token where token.tokenHash = :tokenHash")
     Optional<RefreshToken> findByTokenHashForUpdate(@Param("tokenHash") String tokenHash);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update RefreshToken token
+            set token.revokedAt = :revokedAt
+            where token.familyId = :familyId
+              and token.revokedAt is null
+            """)
+    int revokeActiveTokensByFamilyId(
+            @Param("familyId") UUID familyId,
+            @Param("revokedAt") Instant revokedAt
+    );
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Transactional

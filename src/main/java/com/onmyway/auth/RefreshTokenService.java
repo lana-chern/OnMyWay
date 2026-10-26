@@ -17,6 +17,7 @@ import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.HexFormat;
+import java.util.UUID;
 
 @Service
 public class RefreshTokenService {
@@ -44,7 +45,9 @@ public class RefreshTokenService {
     @Transactional
     public String issue(User user) {
         String rawToken = generateRawToken();
-        refreshTokenRepository.save(new RefreshToken(user, hash(rawToken), Instant.now().plusMillis(expirationMs)));
+        refreshTokenRepository.save(new RefreshToken(
+                user, hash(rawToken), Instant.now().plusMillis(expirationMs), UUID.randomUUID()
+        ));
         return rawToken;
     }
 
@@ -55,9 +58,23 @@ public class RefreshTokenService {
         }
 
         Instant now = Instant.now();
-        RefreshToken storedToken = refreshTokenRepository.findByTokenHashForUpdate(hash(rawToken))
+        String tokenHash = hash(rawToken);
+        UUID familyId = refreshTokenRepository.findFamilyIdByTokenHash(tokenHash)
                 .orElseThrow(() -> new InvalidAuthenticationException("Invalid refresh token"));
 
+        // Lock the family before locking an individual token. This makes reuse detection
+        // atomic with concurrent rotations, preventing a just-created descendant from
+        // escaping the family-wide revocation.
+        refreshTokenRepository.lockFamily(familyId);
+        RefreshToken storedToken = refreshTokenRepository.findByTokenHashForUpdate(tokenHash)
+                .orElseThrow(() -> new InvalidAuthenticationException("Invalid refresh token"));
+
+        if (storedToken.isRevoked()) {
+            // A previously rotated token is being replayed. Revoke its entire session family.
+            // noRollbackFor ensures the family-wide revocation commits with the authentication error.
+            refreshTokenRepository.revokeActiveTokensByFamilyId(storedToken.getFamilyId(), now);
+            throw new InvalidAuthenticationException("Invalid refresh token");
+        }
         if (!storedToken.isUsableAt(now)) {
             throw new InvalidAuthenticationException("Invalid refresh token");
         }
@@ -72,7 +89,9 @@ public class RefreshTokenService {
         storedToken.revoke(now);
         refreshTokenRepository.save(storedToken);
         String replacement = generateRawToken();
-        refreshTokenRepository.save(new RefreshToken(user, hash(replacement), now.plusMillis(expirationMs)));
+        refreshTokenRepository.save(new RefreshToken(
+                user, hash(replacement), now.plusMillis(expirationMs), storedToken.getFamilyId()
+        ));
         return new RefreshGrant(user, replacement);
     }
 

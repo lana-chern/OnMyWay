@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.Instant;
+import java.util.UUID;
 
 @Getter
 @NoArgsConstructor
@@ -22,6 +23,9 @@ public class RefreshToken {
     @Column(name = "token_hash", nullable = false, length = 64, unique = true)
     private String tokenHash;
 
+    @Column(name = "family_id", nullable = false, updatable = false)
+    private UUID familyId;
+
     @Column(name = "expires_at", nullable = false)
     private Instant expiresAt;
 
@@ -32,9 +36,14 @@ public class RefreshToken {
     private Instant createdAt;
 
     public RefreshToken(User user, String tokenHash, Instant expiresAt) {
+        this(user, tokenHash, expiresAt, UUID.randomUUID());
+    }
+
+    public RefreshToken(User user, String tokenHash, Instant expiresAt, UUID familyId) {
         this.user = user;
         this.tokenHash = tokenHash;
         this.expiresAt = expiresAt;
+        this.familyId = familyId;
     }
 
     @PrePersist
@@ -44,6 +53,10 @@ public class RefreshToken {
 
     public boolean isUsableAt(Instant now) {
         return revokedAt == null && expiresAt.isAfter(now);
+    }
+
+    public boolean isRevoked() {
+        return revokedAt != null;
     }
 
     public void revoke(Instant now) {
