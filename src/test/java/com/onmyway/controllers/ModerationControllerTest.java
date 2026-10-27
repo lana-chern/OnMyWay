@@ -104,7 +104,7 @@ class ModerationControllerTest {
         Place place = placeRepository.saveAndFlush(place(owner, "Pending place", PlaceStatus.PENDING_MODERATION));
 
         mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
-                        .with(user(principal(moderator))))
+                        .with(user(principal(moderator)))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"version\":" + place.getVersion() + "}")
                 .andExpect(status().isOk())
@@ -121,7 +121,7 @@ class ModerationControllerTest {
         Place place = placeRepository.saveAndFlush(place(owner, "Admin pending place", PlaceStatus.PENDING_MODERATION));
 
         mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
-                        .with(user(principal(admin))))
+                        .with(user(principal(admin)))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"version\":" + place.getVersion() + "}")
                 .andExpect(status().isOk())
@@ -256,7 +256,7 @@ class ModerationControllerTest {
         placeRepository.saveAndFlush(place);
 
         mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
-                        .with(user(principal(moderator))))
+                        .with(user(principal(moderator)))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"version\":" + place.getVersion() + "}")
                 .andExpect(status().isOk())
@@ -300,7 +300,7 @@ class ModerationControllerTest {
         Place place = placeRepository.saveAndFlush(place(owner, "Draft place", PlaceStatus.DRAFT));
 
         mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
-                        .with(user(principal(moderator))))
+                        .with(user(principal(moderator)))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"version\":" + place.getVersion() + "}")
                 .andExpect(status().isConflict());
@@ -315,7 +315,7 @@ class ModerationControllerTest {
         Place place = placeRepository.saveAndFlush(place(owner, "Already published", PlaceStatus.PUBLISHED));
 
         mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
-                        .with(user(principal(moderator))))
+                        .with(user(principal(moderator)))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"version\":" + place.getVersion() + "}")
                 .andExpect(status().isConflict());
@@ -382,7 +382,7 @@ class ModerationControllerTest {
                     throw new IllegalStateException("Timed out waiting to start publish request");
                 }
                 return mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
-                                .with(user(principal(moderator))))
+                                .with(user(principal(moderator)))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"version\":" + place.getVersion() + "}")
                         .andReturn().getResponse().getStatus();
