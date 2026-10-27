@@ -28,6 +28,9 @@ public class User {
     @Column(nullable = false, length = 100)
     private String displayName;
 
+    @Column(nullable = false)
+    private long tokenVersion = 0;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private UserStatus status = UserStatus.ACTIVE;
@@ -43,6 +46,13 @@ public class User {
 
     @Column(nullable = false)
     private Instant updatedAt;
+
+    public void setStatus(UserStatus status) {
+        if (this.status != status) {
+            this.status = status;
+            this.tokenVersion++;
+        }
+    }
 
     @PrePersist
     void prePersist() {
