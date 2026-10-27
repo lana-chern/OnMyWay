@@ -19,6 +19,16 @@ public final class OnMyWayUserDetails implements UserDetails {
             String email,
             String password,
             Collection<? extends GrantedAuthority> authorities,
+            boolean enabled
+    ) {
+        this(id, email, password, authorities, enabled, 0);
+    }
+
+    public OnMyWayUserDetails(
+            Long id,
+            String email,
+            String password,
+            Collection<? extends GrantedAuthority> authorities,
             boolean enabled,
             long tokenVersion
     ) {
