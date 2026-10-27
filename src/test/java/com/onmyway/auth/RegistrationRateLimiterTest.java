@@ -9,7 +9,7 @@ class RegistrationRateLimiterTest {
 
     @Test
     void allowsFiveAttemptsFromSameIpAndRejectsTheSixth() {
-        RegistrationRateLimiter limiter = new RegistrationRateLimiter();
+        RegistrationRateLimiter limiter = new RegistrationRateLimiter(5);
 
         for (int i = 0; i < 5; i++) {
             limiter.checkAndRecord("192.0.2.10");
@@ -22,7 +22,7 @@ class RegistrationRateLimiterTest {
 
     @Test
     void tracksDifferentIpsIndependently() {
-        RegistrationRateLimiter limiter = new RegistrationRateLimiter();
+        RegistrationRateLimiter limiter = new RegistrationRateLimiter(5);
 
         for (int i = 0; i < 5; i++) {
             limiter.checkAndRecord("192.0.2.10");
@@ -34,7 +34,7 @@ class RegistrationRateLimiterTest {
 
     @Test
     void treatsMissingIpAsOneSharedClientKey() {
-        RegistrationRateLimiter limiter = new RegistrationRateLimiter();
+        RegistrationRateLimiter limiter = new RegistrationRateLimiter(5);
 
         for (int i = 0; i < 5; i++) {
             limiter.checkAndRecord(null);
