@@ -510,6 +510,36 @@ class AuthControllerTest {
                 .allSatisfy(token -> assertThat(token.getRevokedAt()).isNotNull());
     }
 
+    @Test
+    void allowsValidLoginAfterSuspiciousFailuresWhenCaptchaIsNotConfigured() throws Exception {
+        registerUser("captcha-not-configured@example.com", "password123", "Alice");
+
+        for (int i = 0; i < 3; i++) {
+            mockMvc.perform(post("/api/auth/login")
+                            .with(request -> { request.setRemoteAddr("192.0.2.99"); return request; })
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {
+                                      "email": "captcha-not-configured@example.com",
+                                      "password": "wrong-password"
+                                    }
+                                    """))
+                    .andExpect(status().isUnauthorized());
+        }
+
+        mockMvc.perform(post("/api/auth/login")
+                        .with(request -> { request.setRemoteAddr("192.0.2.99"); return request; })
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "captcha-not-configured@example.com",
+                                  "password": "password123"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").isString());
+    }
+
     private User registerUser(String email, String password, String displayName) throws Exception {
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
