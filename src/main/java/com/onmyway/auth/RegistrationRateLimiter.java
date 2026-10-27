@@ -1,6 +1,7 @@
 package com.onmyway.auth;
 
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Value;
 
 import java.time.Duration;
 import java.util.HashMap;
@@ -17,12 +18,19 @@ import java.util.Map;
 @Component
 public class RegistrationRateLimiter {
     private static final long WINDOW_MILLIS = Duration.ofMinutes(15).toMillis();
-    private static final int MAX_ATTEMPTS = 5;
+    private final int maxAttempts;
     private static final int MAX_TRACKED_IPS = 10_000;
     private static final int OVERFLOW_BUCKET_COUNT = 256;
 
     private final Map<String, Window> windows = new HashMap<>();
     private final Window[] overflowWindows = new Window[OVERFLOW_BUCKET_COUNT];
+
+    public RegistrationRateLimiter() { this(5); }
+
+    RegistrationRateLimiter(@Value("${omw.auth.registration-max-attempts:5}") int maxAttempts) {
+        if (maxAttempts < 1) throw new IllegalArgumentException("maxAttempts must be positive");
+        this.maxAttempts = maxAttempts;
+    }
 
     public synchronized void checkAndRecord(String ipAddress) {
         long now = System.currentTimeMillis();
@@ -54,7 +62,7 @@ public class RegistrationRateLimiter {
             overflow = new Window(now);
             overflowWindows[overflowBucket] = overflow;
         }
-        if (overflow.attempts >= MAX_ATTEMPTS) {
+        if (overflow.attempts >= maxAttempts) {
             throw new TooManyRegistrationAttemptsException();
         }
         overflow.attempts++;
@@ -64,7 +72,7 @@ public class RegistrationRateLimiter {
         if (now - window.startedAt >= WINDOW_MILLIS) {
             return false;
         }
-        return window.attempts >= MAX_ATTEMPTS;
+        return window.attempts >= maxAttempts;
     }
 
     private boolean isActive(Window window, long now) {
