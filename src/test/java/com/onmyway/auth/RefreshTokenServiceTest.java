@@ -120,6 +120,31 @@ class RefreshTokenServiceTest {
     }
 
     @Test
+    void tokenIssuedBeforeBlockAndReactivationCannotBeRotated() {
+        User user = activeUser();
+        UUID familyId = UUID.randomUUID();
+        RefreshToken token = new RefreshToken(
+                user, "stored-hash", Instant.now().plusSeconds(60), familyId
+        );
+        user.setStatus(UserStatus.BLOCKED);
+        user.setStatus(UserStatus.ACTIVE);
+
+        when(refreshTokenRepository.findFamilyIdByTokenHash(anyString()))
+                .thenReturn(Optional.of(familyId));
+        when(refreshTokenRepository.findByTokenHashForUpdate(anyString()))
+                .thenReturn(Optional.of(token));
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> service.rotate("old-refresh-token"))
+                .isInstanceOf(InvalidAuthenticationException.class)
+                .hasMessage("Invalid refresh token");
+
+        verify(refreshTokenRepository).lockFamily(familyId);
+        verify(refreshTokenRepository).revokeActiveTokensByFamilyId(eq(familyId), any(Instant.class));
+        verify(refreshTokenRepository, never()).save(any(RefreshToken.class));
+    }
+
+    @Test
     void logoutRevokesAllActiveTokensInTheRefreshTokenFamily() {
         UUID familyId = UUID.randomUUID();
         when(refreshTokenRepository.findFamilyIdByTokenHash(anyString()))
