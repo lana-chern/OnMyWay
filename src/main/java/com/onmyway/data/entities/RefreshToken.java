@@ -26,6 +26,9 @@ public class RefreshToken {
     @Column(name = "family_id", nullable = false, updatable = false)
     private UUID familyId;
 
+    @Column(name = "token_version", nullable = false)
+    private long tokenVersion;
+
     @Column(name = "expires_at", nullable = false)
     private Instant expiresAt;
 
@@ -44,6 +47,7 @@ public class RefreshToken {
         this.tokenHash = tokenHash;
         this.expiresAt = expiresAt;
         this.familyId = familyId;
+        this.tokenVersion = user.getTokenVersion();
     }
 
     @PrePersist
