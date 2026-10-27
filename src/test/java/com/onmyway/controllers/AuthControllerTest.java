@@ -196,6 +196,34 @@ class AuthControllerTest {
     }
 
     @Test
+    void allowsValidLoginAfterSuspiciousFailuresWhenCaptchaIsNotConfigured() throws Exception {
+        registerUser("captcha-not-configured@example.com", "password123", "Alice");
+
+        for (int i = 0; i < 3; i++) {
+            mockMvc.perform(post("/api/auth/login")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {
+                                      "email": "captcha-not-configured@example.com",
+                                      "password": "wrong-password"
+                                    }
+                                    """))
+                    .andExpect(status().isUnauthorized());
+        }
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "captcha-not-configured@example.com",
+                                  "password": "password123"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").isString());
+    }
+
+    @Test
     void returnsCurrentUserWithValidJwt() throws Exception {
         registerUser("test@example.com", "password123", "Alice");
         String token = jwtService.generateToken(userRepository.findByEmailIgnoreCase("test@example.com").orElseThrow().getId());
