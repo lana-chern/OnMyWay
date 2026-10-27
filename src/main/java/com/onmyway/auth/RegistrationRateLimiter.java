@@ -25,9 +25,7 @@ public class RegistrationRateLimiter {
     private final Map<String, Window> windows = new HashMap<>();
     private final Window[] overflowWindows = new Window[OVERFLOW_BUCKET_COUNT];
 
-    public RegistrationRateLimiter() { this(5); }
-
-    RegistrationRateLimiter(@Value("${omw.auth.registration-max-attempts:5}") int maxAttempts) {
+    public RegistrationRateLimiter(@Value("${omw.auth.registration-max-attempts:5}") int maxAttempts) {
         if (maxAttempts < 1) throw new IllegalArgumentException("maxAttempts must be positive");
         this.maxAttempts = maxAttempts;
     }
