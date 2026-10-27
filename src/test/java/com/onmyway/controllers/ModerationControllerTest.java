@@ -105,6 +105,8 @@ class ModerationControllerTest {
 
         mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
                         .with(user(principal(moderator))))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\\\"version\\\":" + place.getVersion() + "}")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("PUBLISHED"))
                 .andExpect(jsonPath("$.version").value(1));
@@ -120,6 +122,8 @@ class ModerationControllerTest {
 
         mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
                         .with(user(principal(admin))))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\\\"version\\\":" + place.getVersion() + "}")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("PUBLISHED"));
 
@@ -253,6 +257,8 @@ class ModerationControllerTest {
 
         mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
                         .with(user(principal(moderator))))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\\\"version\\\":" + place.getVersion() + "}")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("PUBLISHED"))
                 .andExpect(jsonPath("$.rejectionReason").value(org.hamcrest.Matchers.nullValue()));
@@ -295,6 +301,8 @@ class ModerationControllerTest {
 
         mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
                         .with(user(principal(moderator))))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\\\"version\\\":" + place.getVersion() + "}")
                 .andExpect(status().isConflict());
 
         assertThat(placeRepository.findById(place.getId()).orElseThrow().getStatus()).isEqualTo(PlaceStatus.DRAFT);
@@ -308,6 +316,8 @@ class ModerationControllerTest {
 
         mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
                         .with(user(principal(moderator))))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\\\"version\\\":" + place.getVersion() + "}")
                 .andExpect(status().isConflict());
 
         assertThat(placeRepository.findById(place.getId()).orElseThrow().getStatus()).isEqualTo(PlaceStatus.PUBLISHED);
@@ -373,6 +383,8 @@ class ModerationControllerTest {
                 }
                 return mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
                                 .with(user(principal(moderator))))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\\\"version\\\":" + place.getVersion() + "}")
                         .andReturn().getResponse().getStatus();
             });
             Future<Integer> rejectStatus = executor.submit(() -> {
