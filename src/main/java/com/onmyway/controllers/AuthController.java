@@ -4,6 +4,7 @@ import com.onmyway.auth.AuthService;
 import com.onmyway.auth.ClientIpAddressResolver;
 import com.onmyway.auth.InvalidAuthenticationException;
 import com.onmyway.auth.LoginRateLimiter;
+import com.onmyway.auth.RegistrationRateLimiter;
 import com.onmyway.auth.TurnstileCaptchaVerifier;
 import com.onmyway.auth.api.CurrentUserResponse;
 import com.onmyway.auth.api.LoginRequest;
@@ -26,20 +27,25 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
     private final AuthService authService;
     private final LoginRateLimiter loginRateLimiter;
+    private final RegistrationRateLimiter registrationRateLimiter;
     private final ClientIpAddressResolver clientIpAddressResolver;
     private final TurnstileCaptchaVerifier captchaVerifier;
 
     public AuthController(AuthService authService, LoginRateLimiter loginRateLimiter,
+                          RegistrationRateLimiter registrationRateLimiter,
                           ClientIpAddressResolver clientIpAddressResolver,
                           TurnstileCaptchaVerifier captchaVerifier) {
         this.authService = authService;
         this.loginRateLimiter = loginRateLimiter;
+        this.registrationRateLimiter = registrationRateLimiter;
         this.clientIpAddressResolver = clientIpAddressResolver;
         this.captchaVerifier = captchaVerifier;
     }
 
     @PostMapping("/register")
-    public ResponseEntity<CurrentUserResponse> register(@RequestBody RegisterRequest request) {
+    public ResponseEntity<CurrentUserResponse> register(@RequestBody RegisterRequest request,
+                                                        HttpServletRequest servletRequest) {
+        registrationRateLimiter.checkAndRecord(clientIpAddressResolver.resolve(servletRequest));
         return ResponseEntity.status(HttpStatus.CREATED).body(authService.register(request));
     }
 
@@ -51,8 +57,8 @@ public class AuthController {
         try {
             loginRateLimiter.applyDelay(attempt);
             if (attempt.requiresAdditionalVerification()
-                    && (!captchaVerifier.isConfigured()
-                    || !captchaVerifier.verify(request == null ? null : request.captchaToken(), ipAddress))) {
+                    && captchaVerifier.isConfigured()
+                    && !captchaVerifier.verify(request == null ? null : request.captchaToken(), ipAddress)) {
                 throw new InvalidAuthenticationException("Invalid email or password");
             }
             LoginResponse response = authService.login(request);

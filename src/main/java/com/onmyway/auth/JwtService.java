@@ -25,13 +25,21 @@ public class JwtService {
     }
 
     public String generateToken(Long userId) {
+        return generateToken(userId, 0);
+    }
+
+    public String generateToken(Long userId, long tokenVersion) {
         if (userId == null || userId <= 0) {
             throw new IllegalArgumentException("User ID must be a positive number");
+        }
+        if (tokenVersion < 0) {
+            throw new IllegalArgumentException("Token version must not be negative");
         }
 
         Instant now = Instant.now();
         return Jwts.builder()
                 .subject(userId.toString())
+                .claim("tokenVersion", tokenVersion)
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plusMillis(expirationMs)))
                 .signWith(signingKey)
@@ -49,6 +57,14 @@ public class JwtService {
         } catch (NumberFormatException exception) {
             throw new IllegalArgumentException("Invalid user ID in token", exception);
         }
+    }
+
+    public long extractTokenVersion(String token) {
+        Object claim = parseClaims(token).get("tokenVersion");
+        if (!(claim instanceof Number version) || version.longValue() < 0) {
+            throw new IllegalArgumentException("Invalid token version");
+        }
+        return version.longValue();
     }
 
     public boolean isValid(String token) {

@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import com.onmyway.auth.InvalidAuthenticationException;
 import com.onmyway.auth.TooManyLoginAttemptsException;
+import com.onmyway.auth.TooManyRegistrationAttemptsException;
 
 import java.util.stream.Collectors;
 
@@ -65,6 +66,13 @@ public class GlobalExceptionHandler {
     ProblemDetail handleTooManyLoginAttempts(TooManyLoginAttemptsException exception) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.TOO_MANY_REQUESTS, exception.getMessage());
         problem.setTitle("Too many login attempts");
+        return problem;
+    }
+
+    @ExceptionHandler(TooManyRegistrationAttemptsException.class)
+    ProblemDetail handleTooManyRegistrationAttempts(TooManyRegistrationAttemptsException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.TOO_MANY_REQUESTS, exception.getMessage());
+        problem.setTitle("Too many registration attempts");
         return problem;
     }
 

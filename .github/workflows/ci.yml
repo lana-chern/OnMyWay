@@ -44,9 +44,77 @@ jobs:
       - name: Make Maven Wrapper executable
         run: chmod +x mvnw
 
-      - name: Build, test, and verify PostgreSQL migrations
-        run: ./mvnw --batch-mode --no-transfer-progress verify
+      - name: Build, run all tests, and verify PostgreSQL migrations
+        run: ./mvnw --batch-mode --no-transfer-progress -Dmaven.test.failure.ignore=true verify
         env:
           MIGRATION_TEST_JDBC_URL: jdbc:postgresql://localhost:5432/migration_test
           MIGRATION_TEST_DB_USERNAME: migration_test
           MIGRATION_TEST_DB_PASSWORD: migration_test
+
+      - name: Summarize test results and fail if any test failed
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import glob
+          import os
+          import sys
+          import xml.etree.ElementTree as ET
+
+          reports = sorted(glob.glob("target/surefire-reports/TEST-*.xml"))
+          if not reports:
+              print("::error::No Surefire XML test reports were found.")
+              sys.exit(1)
+
+          total = failures = errors = skipped = 0
+          failed_cases = []
+          for report in reports:
+              try:
+                  root = ET.parse(report).getroot()
+              except ET.ParseError as exc:
+                  print(f"::error file={report}::Could not parse test report: {exc}")
+                  sys.exit(1)
+
+              suites = [root] if root.tag == "testsuite" else list(root.findall("testsuite"))
+              for suite in suites:
+                  total += int(suite.attrib.get("tests", 0))
+                  failures += int(suite.attrib.get("failures", 0))
+                  errors += int(suite.attrib.get("errors", 0))
+                  skipped += int(suite.attrib.get("skipped", 0))
+                  for case in suite.findall("testcase"):
+                      failure = case.find("failure")
+                      error = case.find("error")
+                      problem = failure if failure is not None else error
+                      if problem is not None:
+                          failed_cases.append(
+                              f"{case.attrib.get('classname', suite.attrib.get('name', 'unknown'))}"
+                              f"#{case.attrib.get('name', 'unknown')}: "
+                              f"{(problem.attrib.get('message') or problem.text or '').strip()[:500]}"
+                          )
+
+          summary = (
+              f"### Test summary\n\n"
+              f"- Tests: **{total}**\n"
+              f"- Failures: **{failures}**\n"
+              f"- Errors: **{errors}**\n"
+              f"- Skipped: **{skipped}**\n"
+          )
+          if failed_cases:
+              summary += "\n#### Failed tests\n" + "\n".join(f"- {case}" for case in failed_cases)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as out:
+              out.write(summary + "\n")
+
+          print(summary)
+          if failures or errors:
+              print("::error::One or more tests failed. See the test summary and Surefire reports.")
+              sys.exit(1)
+          PY
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-test-reports
+          path: target/surefire-reports/
+          if-no-files-found: warn
+          retention-days: 7

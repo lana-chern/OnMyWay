@@ -83,7 +83,7 @@ public class AuthService {
                 .orElseThrow(() -> new InvalidAuthenticationException("Invalid email or password"));
 
         return new LoginResponse(
-                jwtService.generateToken(user.getId()),
+                jwtService.generateToken(user.getId(), user.getTokenVersion()),
                 refreshTokenService.issue(user),
                 toResponse(user)
         );
@@ -93,7 +93,7 @@ public class AuthService {
         RefreshTokenService.RefreshGrant grant = refreshTokenService.rotate(rawRefreshToken);
         User user = grant.user();
         return new LoginResponse(
-                jwtService.generateToken(user.getId()),
+                jwtService.generateToken(user.getId(), user.getTokenVersion()),
                 grant.refreshToken(),
                 toResponse(user)
         );

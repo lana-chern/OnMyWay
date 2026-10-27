@@ -30,7 +30,7 @@ import java.util.concurrent.TimeUnit;
 
 @SpringBootTest
 @AutoConfigureMockMvc
-@TestPropertySource(properties = "omw.jwt.secret=MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=")
+@TestPropertySource(properties = {"omw.jwt.secret=MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=", "omw.auth.registration-max-attempts=1000"})
 class AuthControllerTest {
     @Autowired
     MockMvc mockMvc;
@@ -234,6 +234,31 @@ class AuthControllerTest {
         mockMvc.perform(get("/api/auth/me")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void accessJwtIssuedBeforeBlockingRemainsRevokedAfterReactivation() throws Exception {
+        User user = registerUser("jwt-revocation@example.com", "password123", "JWT Revocation");
+        String tokenIssuedBeforeBlock = jwtService.generateToken(user.getId(), user.getTokenVersion());
+
+        user.setStatus(UserStatus.BLOCKED);
+        userRepository.saveAndFlush(user);
+
+        mockMvc.perform(get("/api/auth/me")
+                        .header("Authorization", "Bearer " + tokenIssuedBeforeBlock))
+                .andExpect(status().isUnauthorized());
+
+        user.setStatus(UserStatus.ACTIVE);
+        userRepository.saveAndFlush(user);
+
+        mockMvc.perform(get("/api/auth/me")
+                        .header("Authorization", "Bearer " + tokenIssuedBeforeBlock))
+                .andExpect(status().isUnauthorized());
+
+        String freshToken = jwtService.generateToken(user.getId(), user.getTokenVersion());
+        mockMvc.perform(get("/api/auth/me")
+                        .header("Authorization", "Bearer " + freshToken))
+                .andExpect(status().isOk());
     }
 
     @Test
@@ -508,6 +533,65 @@ class AuthControllerTest {
 
         assertThat(refreshTokenRepository.findAll()).filteredOn(token -> token.getUser().getId().equals(user.getId()))
                 .allSatisfy(token -> assertThat(token.getRevokedAt()).isNotNull());
+    }
+
+    @Test
+    void refreshTokenIssuedBeforeBlockRemainsInvalidAfterReactivation() throws Exception {
+        User user = registerUser("refresh-revocation@example.com", "password123", "Refresh Revocation");
+        String loginResponse = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"refresh-revocation@example.com","password":"password123"}
+                                """))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String oldRefreshToken = com.jayway.jsonpath.JsonPath.read(loginResponse, "$.refreshToken");
+
+        user.setStatus(UserStatus.BLOCKED);
+        userRepository.saveAndFlush(user);
+        user.setStatus(UserStatus.ACTIVE);
+        userRepository.saveAndFlush(user);
+
+        mockMvc.perform(post("/api/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"refreshToken":"%s"}
+                                """.formatted(oldRefreshToken)))
+                .andExpect(status().isUnauthorized());
+
+        assertThat(refreshTokenRepository.findAll())
+                .filteredOn(token -> token.getUser().getId().equals(user.getId()))
+                .allSatisfy(token -> assertThat(token.getRevokedAt()).isNotNull());
+    }
+
+    @Test
+    void allowsValidLoginAfterSuspiciousFailuresWhenCaptchaIsNotConfigured() throws Exception {
+        registerUser("captcha-not-configured@example.com", "password123", "Alice");
+
+        for (int i = 0; i < 3; i++) {
+            mockMvc.perform(post("/api/auth/login")
+                            .with(request -> { request.setRemoteAddr("192.0.2.99"); return request; })
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {
+                                      "email": "captcha-not-configured@example.com",
+                                      "password": "wrong-password"
+                                    }
+                                    """))
+                    .andExpect(status().isUnauthorized());
+        }
+
+        mockMvc.perform(post("/api/auth/login")
+                        .with(request -> { request.setRemoteAddr("192.0.2.99"); return request; })
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "captcha-not-configured@example.com",
+                                  "password": "password123"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").isString());
     }
 
     private User registerUser(String email, String password, String displayName) throws Exception {

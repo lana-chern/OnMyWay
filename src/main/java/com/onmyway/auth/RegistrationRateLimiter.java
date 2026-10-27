@@ -1,0 +1,115 @@
+package com.onmyway.auth;
+
+import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Value;
+
+import java.time.Duration;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+
+/**
+ * Process-local registration throttle. Five registration attempts per client IP are allowed
+ * in a 15-minute window. For multi-instance deployments, use a shared store such as Redis.
+ *
+ * The primary map is bounded. When it is full, new IPs are routed to fixed overflow buckets;
+ * collisions can conservatively throttle unrelated clients, but do not create unlimited state.
+ */
+@Component
+public class RegistrationRateLimiter {
+    private static final long WINDOW_MILLIS = Duration.ofMinutes(15).toMillis();
+    private final int maxAttempts;
+    private static final int MAX_TRACKED_IPS = 10_000;
+    private static final int OVERFLOW_BUCKET_COUNT = 256;
+
+    private final Map<String, Window> windows = new HashMap<>();
+    private final Window[] overflowWindows = new Window[OVERFLOW_BUCKET_COUNT];
+
+    public RegistrationRateLimiter(@Value("${omw.auth.registration-max-attempts:5}") int maxAttempts) {
+        if (maxAttempts < 1) throw new IllegalArgumentException("maxAttempts must be positive");
+        this.maxAttempts = maxAttempts;
+    }
+
+    public synchronized void checkAndRecord(String ipAddress) {
+        long now = System.currentTimeMillis();
+        removeExpired(now);
+
+        String key = normalizeIp(ipAddress);
+        Window window = windows.get(key);
+        int overflowBucket = bucketFor(key);
+        boolean useOverflow = isActive(overflowWindows[overflowBucket], now);
+
+        if (window != null) {
+            if (isLimited(window, now)) {
+                throw new TooManyRegistrationAttemptsException();
+            }
+            // Keep tracked IPs on their own counter even if an unrelated overflow bucket
+            // happens to be active for the same hash.
+            window.attempts++;
+            return;
+        }
+
+        if (useOverflow && isLimited(overflowWindows[overflowBucket], now)) {
+            throw new TooManyRegistrationAttemptsException();
+        }
+
+        if (!useOverflow && windows.size() < MAX_TRACKED_IPS) {
+            windows.put(key, new Window(now));
+            windows.get(key).attempts++;
+            return;
+        }
+
+        Window overflow = overflowWindows[overflowBucket];
+        if (overflow == null || now - overflow.startedAt >= WINDOW_MILLIS) {
+            overflow = new Window(now);
+            overflowWindows[overflowBucket] = overflow;
+        }
+        if (overflow.attempts >= maxAttempts) {
+            throw new TooManyRegistrationAttemptsException();
+        }
+        overflow.attempts++;
+    }
+
+    private boolean isLimited(Window window, long now) {
+        if (now - window.startedAt >= WINDOW_MILLIS) {
+            return false;
+        }
+        return window.attempts >= maxAttempts;
+    }
+
+    private boolean isActive(Window window, long now) {
+        return window != null && now - window.startedAt < WINDOW_MILLIS;
+    }
+
+    private int bucketFor(String key) {
+        return (key.hashCode() & 0x7fffffff) % OVERFLOW_BUCKET_COUNT;
+    }
+
+    private String normalizeIp(String ipAddress) {
+        return ipAddress == null || ipAddress.isBlank() ? "unknown" : ipAddress.trim();
+    }
+
+    private void removeExpired(long now) {
+        Iterator<Map.Entry<String, Window>> iterator = windows.entrySet().iterator();
+        while (iterator.hasNext()) {
+            if (now - iterator.next().getValue().startedAt >= WINDOW_MILLIS) {
+                iterator.remove();
+            }
+        }
+        for (int i = 0; i < overflowWindows.length; i++) {
+            if (overflowWindows[i] != null
+                    && now - overflowWindows[i].startedAt >= WINDOW_MILLIS) {
+                overflowWindows[i] = null;
+            }
+        }
+    }
+
+    private static final class Window {
+        private final long startedAt;
+        private int attempts;
+
+        private Window(long startedAt) {
+            this.startedAt = startedAt;
+        }
+    }
+}
