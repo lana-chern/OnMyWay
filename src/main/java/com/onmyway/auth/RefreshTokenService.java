@@ -82,7 +82,9 @@ public class RefreshTokenService {
         User user = userRepository.findById(storedToken.getUser().getId())
                 .orElseThrow(() -> new InvalidAuthenticationException("Invalid refresh token"));
         if (user.getStatus() != UserStatus.ACTIVE) {
-            storedToken.revoke(now);
+            // Invalidate every token issued for this session, not just the presented token.
+            // noRollbackFor ensures the revocation commits with the authentication error.
+            refreshTokenRepository.revokeActiveTokensByFamilyId(storedToken.getFamilyId(), now);
             throw new InvalidAuthenticationException("User account is not active");
         }
 
