@@ -139,7 +139,7 @@ class ModerationControllerTest {
         mockMvc.perform(post("/api/moderation/places/{id}/reject", place.getId())
                         .with(user(principal(moderator)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"reason\":\"Missing opening hours\"}"))
+                        .content("{\"version\":" + place.getVersion() + ",\"reason\":\"Missing opening hours\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("REJECTED"))
                 .andExpect(jsonPath("$.rejectionReason").value("Missing opening hours"));
@@ -207,7 +207,7 @@ class ModerationControllerTest {
         mockMvc.perform(post("/api/moderation/places/{id}/reject", place.getId())
                         .with(user(principal(moderator)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"reason\":\"" + tooLongReason + "\"}"))
+                        .content("{\"version\":" + place.getVersion() + ",\"reason\":\"" + tooLongReason + "\"}"))
                 .andExpect(status().isBadRequest());
 
         assertThat(placeRepository.findById(place.getId()).orElseThrow().getStatus())
@@ -226,7 +226,7 @@ class ModerationControllerTest {
         mockMvc.perform(post("/api/moderation/places/{id}/reject", place.getId())
                         .with(user(principal(moderator)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"reason\":\"" + reasonWithSurroundingWhitespace + "\"}"))
+                        .content("{\"version\":" + place.getVersion() + ",\"reason\":\"" + reasonWithSurroundingWhitespace + "\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("REJECTED"))
                 .andExpect(jsonPath("$.rejectionReason").value(maxLengthReason));
@@ -395,7 +395,7 @@ class ModerationControllerTest {
                 return mockMvc.perform(post("/api/moderation/places/{id}/reject", place.getId())
                                 .with(user(principal(secondModerator)))
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content("{\"reason\":\"Concurrent rejection\"}"))
+                                .content("{\"version\":" + place.getVersion() + ",\"reason\":\"Concurrent rejection\"}"))
                         .andReturn().getResponse().getStatus();
             });
 
