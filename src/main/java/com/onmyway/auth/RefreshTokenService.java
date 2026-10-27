@@ -87,6 +87,12 @@ public class RefreshTokenService {
             refreshTokenRepository.revokeActiveTokensByFamilyId(storedToken.getFamilyId(), now);
             throw new InvalidAuthenticationException("User account is not active");
         }
+        if (storedToken.getTokenVersion() != user.getTokenVersion()) {
+            // The account status changed after this refresh token was issued (for example,
+            // it was blocked and then reactivated). Never revive the old session.
+            refreshTokenRepository.revokeActiveTokensByFamilyId(storedToken.getFamilyId(), now);
+            throw new InvalidAuthenticationException("Invalid refresh token");
+        }
 
         storedToken.revoke(now);
         refreshTokenRepository.save(storedToken);
