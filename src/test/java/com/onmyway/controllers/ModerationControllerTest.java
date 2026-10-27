@@ -106,7 +106,7 @@ class ModerationControllerTest {
         mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
                         .with(user(principal(moderator))))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\\\"version\\\":" + place.getVersion() + "}")
+                        .content("{\"version\":" + place.getVersion() + "}")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("PUBLISHED"))
                 .andExpect(jsonPath("$.version").value(1));
@@ -123,7 +123,7 @@ class ModerationControllerTest {
         mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
                         .with(user(principal(admin))))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\\\"version\\\":" + place.getVersion() + "}")
+                        .content("{\"version\":" + place.getVersion() + "}")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("PUBLISHED"));
 
@@ -258,7 +258,7 @@ class ModerationControllerTest {
         mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
                         .with(user(principal(moderator))))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\\\"version\\\":" + place.getVersion() + "}")
+                        .content("{\"version\":" + place.getVersion() + "}")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("PUBLISHED"))
                 .andExpect(jsonPath("$.rejectionReason").value(org.hamcrest.Matchers.nullValue()));
@@ -283,7 +283,7 @@ class ModerationControllerTest {
         mockMvc.perform(put("/api/places/{id}", place.getId())
                         .with(user(principal(moderator)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\":\"Edited by moderator\",\"latitude\":52.370000,\"longitude\":4.900000,\"version\":" + place.getVersion() + "}"))
+                        .content("{\"version\":" + place.getVersion() + "}")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("Edited by moderator"));
 
@@ -302,7 +302,7 @@ class ModerationControllerTest {
         mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
                         .with(user(principal(moderator))))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\\\"version\\\":" + place.getVersion() + "}")
+                        .content("{\"version\":" + place.getVersion() + "}")
                 .andExpect(status().isConflict());
 
         assertThat(placeRepository.findById(place.getId()).orElseThrow().getStatus()).isEqualTo(PlaceStatus.DRAFT);
@@ -317,7 +317,7 @@ class ModerationControllerTest {
         mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
                         .with(user(principal(moderator))))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\\\"version\\\":" + place.getVersion() + "}")
+                        .content("{\"version\":" + place.getVersion() + "}")
                 .andExpect(status().isConflict());
 
         assertThat(placeRepository.findById(place.getId()).orElseThrow().getStatus()).isEqualTo(PlaceStatus.PUBLISHED);
@@ -384,7 +384,7 @@ class ModerationControllerTest {
                 return mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
                                 .with(user(principal(moderator))))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\\\"version\\\":" + place.getVersion() + "}")
+                        .content("{\"version\":" + place.getVersion() + "}")
                         .andReturn().getResponse().getStatus();
             });
             Future<Integer> rejectStatus = executor.submit(() -> {
