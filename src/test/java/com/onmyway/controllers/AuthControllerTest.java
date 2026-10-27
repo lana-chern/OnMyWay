@@ -237,6 +237,31 @@ class AuthControllerTest {
     }
 
     @Test
+    void accessJwtIssuedBeforeBlockingRemainsRevokedAfterReactivation() throws Exception {
+        User user = registerUser("jwt-revocation@example.com", "password123", "JWT Revocation");
+        String tokenIssuedBeforeBlock = jwtService.generateToken(user.getId(), user.getTokenVersion());
+
+        user.setStatus(UserStatus.BLOCKED);
+        userRepository.saveAndFlush(user);
+
+        mockMvc.perform(get("/api/auth/me")
+                        .header("Authorization", "Bearer " + tokenIssuedBeforeBlock))
+                .andExpect(status().isUnauthorized());
+
+        user.setStatus(UserStatus.ACTIVE);
+        userRepository.saveAndFlush(user);
+
+        mockMvc.perform(get("/api/auth/me")
+                        .header("Authorization", "Bearer " + tokenIssuedBeforeBlock))
+                .andExpect(status().isUnauthorized());
+
+        String freshToken = jwtService.generateToken(user.getId(), user.getTokenVersion());
+        mockMvc.perform(get("/api/auth/me")
+                        .header("Authorization", "Bearer " + freshToken))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     void rejectsInvalidLoginCredentials() throws Exception {
         registerUser("test@example.com", "password123", "Alice");
 
