@@ -150,11 +150,11 @@ public class PlaceService {
                 .stream().map(PlaceResponse::from).toList();
     }
 
-    public PlaceResponse publish(Long id, boolean moderatorOrAdmin) {
-        return moderatePendingPlace(id, moderatorOrAdmin, PlaceStatus.PUBLISHED, null);
+    public PlaceResponse publish(Long id, boolean moderatorOrAdmin, Long expectedVersion) {
+        return moderatePendingPlace(id, moderatorOrAdmin, PlaceStatus.PUBLISHED, null, expectedVersion);
     }
 
-    public PlaceResponse reject(Long id, boolean moderatorOrAdmin, String reason) {
+    public PlaceResponse reject(Long id, boolean moderatorOrAdmin, Long expectedVersion, String reason) {
         if (reason == null || reason.isBlank()) {
             throw new IllegalArgumentException("A rejection reason is required");
         }
@@ -162,18 +162,26 @@ public class PlaceService {
         if (normalizedReason.length() > MAX_REJECTION_REASON_LENGTH) {
             throw new IllegalArgumentException("Rejection reason must be at most %d characters".formatted(MAX_REJECTION_REASON_LENGTH));
         }
-        return moderatePendingPlace(id, moderatorOrAdmin, PlaceStatus.REJECTED, normalizedReason);
+        return moderatePendingPlace(id, moderatorOrAdmin, PlaceStatus.REJECTED, normalizedReason, expectedVersion);
     }
 
-    private PlaceResponse moderatePendingPlace(Long id, boolean moderatorOrAdmin, PlaceStatus targetStatus, String rejectionReason) {
+    private PlaceResponse moderatePendingPlace(Long id, boolean moderatorOrAdmin, PlaceStatus targetStatus,
+                                               String rejectionReason, Long expectedVersion) {
         assertCanModerate(moderatorOrAdmin);
+        if (expectedVersion == null) {
+            throw new IllegalArgumentException("version is required");
+        }
         Place place = placeRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Place %d not found".formatted(id)));
+        if (!Objects.equals(expectedVersion, place.getVersion())) {
+            throw new StalePlaceVersionException(expectedVersion, place.getVersion());
+        }
         if (place.getStatus() != PlaceStatus.PENDING_MODERATION) {
             throw new IllegalStateException("Only places pending moderation can be published or rejected");
         }
         place.setRejectionReason(rejectionReason);
         place.setStatus(targetStatus);
+        // The @Version predicate protects against edits that race with this moderation decision.
         placeRepository.flush();
         return PlaceResponse.from(place);
     }
