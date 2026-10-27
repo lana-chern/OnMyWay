@@ -69,7 +69,7 @@ class AuthServiceTest {
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
                 .thenReturn(authenticatedUser(user));
         when(userRepository.findById(1L)).thenReturn(java.util.Optional.of(user));
-        when(jwtService.generateToken(1L)).thenReturn("jwt-token");
+        when(jwtService.generateToken(1L, user.getTokenVersion())).thenReturn("jwt-token");
         when(refreshTokenService.issue(user)).thenReturn("refresh-token");
         LoginResponse response = authService.login(request);
         assertThat(response.accessToken()).isEqualTo("jwt-token");
@@ -78,7 +78,7 @@ class AuthServiceTest {
         assertThat(response.user().displayName()).isEqualTo("Alice");
         assertThat(response.user().roles()).containsExactly(Role.USER);
         verify(authenticationManager).authenticate(any(UsernamePasswordAuthenticationToken.class));
-        verify(jwtService).generateToken(1L);
+        verify(jwtService).generateToken(1L, user.getTokenVersion());
         verify(refreshTokenService).issue(user);
     }
 
