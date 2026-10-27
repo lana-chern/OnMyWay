@@ -37,7 +37,8 @@ public class OnMyWayUserDetailsService implements UserDetailsService {
                 user.getRoles().stream()
                         .map(role -> new SimpleGrantedAuthority("ROLE_" + role.name()))
                         .toList(),
-                user.getStatus() == UserStatus.ACTIVE
+                user.getStatus() == UserStatus.ACTIVE,
+                user.getTokenVersion()
         );
     }
 }
