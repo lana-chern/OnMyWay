@@ -201,6 +201,7 @@ class AuthControllerTest {
 
         for (int i = 0; i < 3; i++) {
             mockMvc.perform(post("/api/auth/login")
+                            .with(request -> { request.setRemoteAddr("192.0.2.99"); return request; })
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("""
                                     {
@@ -212,6 +213,7 @@ class AuthControllerTest {
         }
 
         mockMvc.perform(post("/api/auth/login")
+                        .with(request -> { request.setRemoteAddr("192.0.2.99"); return request; })
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
