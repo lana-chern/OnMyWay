@@ -57,8 +57,8 @@ public class AuthController {
         try {
             loginRateLimiter.applyDelay(attempt);
             if (attempt.requiresAdditionalVerification()
-                    && (!captchaVerifier.isConfigured()
-                    || !captchaVerifier.verify(request == null ? null : request.captchaToken(), ipAddress))) {
+                    && captchaVerifier.isConfigured()
+                    && !captchaVerifier.verify(request == null ? null : request.captchaToken(), ipAddress)) {
                 throw new InvalidAuthenticationException("Invalid email or password");
             }
             LoginResponse response = authService.login(request);
