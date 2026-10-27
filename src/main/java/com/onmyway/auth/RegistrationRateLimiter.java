@@ -39,19 +39,23 @@ public class RegistrationRateLimiter {
         int overflowBucket = bucketFor(key);
         boolean useOverflow = isActive(overflowWindows[overflowBucket], now);
 
-        if (window != null && isLimited(window, now)) {
-            throw new TooManyRegistrationAttemptsException();
+        if (window != null) {
+            if (isLimited(window, now)) {
+                throw new TooManyRegistrationAttemptsException();
+            }
+            // Keep tracked IPs on their own counter even if an unrelated overflow bucket
+            // happens to be active for the same hash.
+            window.attempts++;
+            return;
         }
+
         if (useOverflow && isLimited(overflowWindows[overflowBucket], now)) {
             throw new TooManyRegistrationAttemptsException();
         }
 
-        if (!useOverflow && (window != null || windows.size() < MAX_TRACKED_IPS)) {
-            if (window == null) {
-                window = new Window(now);
-                windows.put(key, window);
-            }
-            window.attempts++;
+        if (!useOverflow && windows.size() < MAX_TRACKED_IPS) {
+            windows.put(key, new Window(now));
+            windows.get(key).attempts++;
             return;
         }
 
