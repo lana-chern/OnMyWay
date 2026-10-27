@@ -536,6 +536,35 @@ class AuthControllerTest {
     }
 
     @Test
+    void refreshTokenIssuedBeforeBlockRemainsInvalidAfterReactivation() throws Exception {
+        User user = registerUser("refresh-revocation@example.com", "password123", "Refresh Revocation");
+        String loginResponse = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"refresh-revocation@example.com","password":"password123"}
+                                """))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String oldRefreshToken = com.jayway.jsonpath.JsonPath.read(loginResponse, "$.refreshToken");
+
+        user.setStatus(UserStatus.BLOCKED);
+        userRepository.saveAndFlush(user);
+        user.setStatus(UserStatus.ACTIVE);
+        userRepository.saveAndFlush(user);
+
+        mockMvc.perform(post("/api/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"refreshToken":"%s"}
+                                """.formatted(oldRefreshToken)))
+                .andExpect(status().isUnauthorized());
+
+        assertThat(refreshTokenRepository.findAll())
+                .filteredOn(token -> token.getUser().getId().equals(user.getId()))
+                .allSatisfy(token -> assertThat(token.getRevokedAt()).isNotNull());
+    }
+
+    @Test
     void allowsValidLoginAfterSuspiciousFailuresWhenCaptchaIsNotConfigured() throws Exception {
         registerUser("captcha-not-configured@example.com", "password123", "Alice");
 
