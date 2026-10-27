@@ -45,8 +45,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         Long userId;
+        long tokenVersion;
         try {
             userId = jwtService.extractUserId(token);
+            tokenVersion = jwtService.extractTokenVersion(token);
         } catch (JwtException | IllegalArgumentException exception) {
             response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid bearer token");
             return;
@@ -60,7 +62,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
-        if (!userDetails.isEnabled()) {
+        if (!userDetails.isEnabled() || userDetails.getTokenVersion() != tokenVersion) {
             response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid bearer token");
             return;
         }
