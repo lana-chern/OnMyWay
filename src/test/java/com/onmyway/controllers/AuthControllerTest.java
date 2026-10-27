@@ -30,7 +30,7 @@ import java.util.concurrent.TimeUnit;
 
 @SpringBootTest
 @AutoConfigureMockMvc
-@TestPropertySource(properties = "omw.jwt.secret=MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=")
+@TestPropertySource(properties = {"omw.jwt.secret=MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=", "omw.auth.registration-max-attempts=1000"})
 class AuthControllerTest {
     @Autowired
     MockMvc mockMvc;
