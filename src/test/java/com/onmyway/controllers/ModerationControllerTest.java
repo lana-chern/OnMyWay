@@ -419,6 +419,27 @@ class ModerationControllerTest {
         }
     }
 
+    @Test
+    void staleVersionCannotPublishPlaceAfterOrganizerEdit() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("moderation-stale-owner@example.com", Role.ORGANIZER));
+        User moderator = userRepository.saveAndFlush(testUser("moderation-stale-mod@example.com", Role.MODERATOR));
+        Place place = placeRepository.saveAndFlush(place(owner, "Pending place", PlaceStatus.PENDING_MODERATION));
+        long reviewedVersion = place.getVersion();
+
+        place.setName("Updated by organizer");
+        placeRepository.saveAndFlush(place);
+
+        mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
+                        .with(user(principal(moderator)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\\"version\\":" + reviewedVersion + "}"))
+                .andExpect(status().isConflict());
+
+        Place persisted = placeRepository.findById(place.getId()).orElseThrow();
+        assertThat(persisted.getStatus()).isEqualTo(PlaceStatus.PENDING_MODERATION);
+        assertThat(persisted.getName()).isEqualTo("Updated by organizer");
+    }
+
     private OnMyWayUserDetails principal(User user) {
         return new OnMyWayUserDetails(
                 user.getId(),
