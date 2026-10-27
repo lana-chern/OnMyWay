@@ -3,6 +3,7 @@ package com.onmyway.auth;
 import com.onmyway.data.entities.RefreshToken;
 import com.onmyway.data.entities.Role;
 import com.onmyway.data.entities.User;
+import com.onmyway.data.entities.UserStatus;
 import com.onmyway.data.repositories.RefreshTokenRepository;
 import com.onmyway.data.repositories.UserRepository;
 import org.junit.jupiter.api.Test;
@@ -93,6 +94,29 @@ class RefreshTokenServiceTest {
         verify(refreshTokenRepository).revokeActiveTokensByFamilyId(eq(familyId), any(Instant.class));
         verify(refreshTokenRepository, never()).save(any(RefreshToken.class));
         verifyNoInteractions(userRepository);
+    }
+
+    @Test
+    void inactiveUserRevokesAllActiveTokensInTheRefreshTokenFamily() {
+        User user = activeUser();
+        user.setStatus(UserStatus.BLOCKED);
+        UUID familyId = UUID.randomUUID();
+        RefreshToken token = new RefreshToken(
+                user, "stored-hash", Instant.now().plusSeconds(60), familyId
+        );
+        when(refreshTokenRepository.findFamilyIdByTokenHash(anyString()))
+                .thenReturn(Optional.of(familyId));
+        when(refreshTokenRepository.findByTokenHashForUpdate(anyString()))
+                .thenReturn(Optional.of(token));
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> service.rotate("inactive-user-token"))
+                .isInstanceOf(InvalidAuthenticationException.class)
+                .hasMessage("User account is not active");
+
+        verify(refreshTokenRepository).lockFamily(familyId);
+        verify(refreshTokenRepository).revokeActiveTokensByFamilyId(eq(familyId), any(Instant.class));
+        verify(refreshTokenRepository, never()).save(any(RefreshToken.class));
     }
 
     @Test
