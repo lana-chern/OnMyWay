@@ -258,7 +258,7 @@ class ModerationControllerTest {
         mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
                         .with(user(principal(moderator)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"version\":" + place.getVersion() + "}"))
+                        .content("{\"version\":" + placeRepository.findById(place.getId()).orElseThrow().getVersion() + "}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("PUBLISHED"))
                 .andExpect(jsonPath("$.rejectionReason").value(org.hamcrest.Matchers.nullValue()));
@@ -283,7 +283,7 @@ class ModerationControllerTest {
         mockMvc.perform(put("/api/places/{id}", place.getId())
                         .with(user(principal(moderator)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"version\":" + place.getVersion() + "}"))
+                        .content("{\"name\":\"Edited by moderator\",\"latitude\":52.370000,\"longitude\":4.900000,\"version\":" + place.getVersion() + "}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("Edited by moderator"));
 
@@ -395,7 +395,7 @@ class ModerationControllerTest {
                 return mockMvc.perform(post("/api/moderation/places/{id}/reject", place.getId())
                                 .with(user(principal(secondModerator)))
                                 .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"version\":" + place.getVersion() + "}"))
+                        .content("{\"version\":" + place.getVersion() + ",\"reason\":\"Concurrent rejection\"}"))
                         .andReturn().getResponse().getStatus();
             });
 
