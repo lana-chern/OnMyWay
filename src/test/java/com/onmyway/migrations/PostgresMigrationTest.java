@@ -28,7 +28,7 @@ class PostgresMigrationTest {
 
             assertEquals(8, result.migrationsExecuted);
             assertColumnExists(schema, "places", "owner_id");
-            assertEquals(6L, queryLong(schema,
+            assertEquals(8L, queryLong(schema,
                     "SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE AND version IN ('1', '2', '3', '4', '5', '6', '7', '8')"));
             assertEquals(0L, queryLong(schema, "SELECT COUNT(*) FROM users WHERE email = '" + LEGACY_EMAIL + "'"));
             assertTrue(hasConstraint(schema, "places", "fk_places_owner"));
