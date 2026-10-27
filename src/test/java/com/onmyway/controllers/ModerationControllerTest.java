@@ -139,7 +139,7 @@ class ModerationControllerTest {
         mockMvc.perform(post("/api/moderation/places/{id}/reject", place.getId())
                         .with(user(principal(moderator)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"version\":" + place.getVersion() + "}"))
+                        .content("{\"version\":" + placeRepository.findById(place.getId()).orElseThrow().getVersion() + ",\"reason\":\"Missing opening hours\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("REJECTED"))
                 .andExpect(jsonPath("$.rejectionReason").value("Missing opening hours"));
@@ -207,7 +207,7 @@ class ModerationControllerTest {
         mockMvc.perform(post("/api/moderation/places/{id}/reject", place.getId())
                         .with(user(principal(moderator)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"version\":" + place.getVersion() + "}"))
+                        .content("{\"version\":" + place.getVersion() + ",\"reason\":\"" + tooLongReason + "\"}"))
                 .andExpect(status().isBadRequest());
 
         assertThat(placeRepository.findById(place.getId()).orElseThrow().getStatus())
@@ -226,7 +226,7 @@ class ModerationControllerTest {
         mockMvc.perform(post("/api/moderation/places/{id}/reject", place.getId())
                         .with(user(principal(moderator)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"version\":" + place.getVersion() + "}"))
+                        .content("{\"version\":" + place.getVersion() + ",\"reason\":\"" + reasonWithSurroundingWhitespace + "\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("REJECTED"))
                 .andExpect(jsonPath("$.rejectionReason").value(maxLengthReason));
