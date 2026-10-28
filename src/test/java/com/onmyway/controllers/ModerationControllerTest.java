@@ -40,7 +40,6 @@ class ModerationControllerTest {
     @Autowired CityRepository cityRepository;
     @Autowired PlaceRepository placeRepository;
     @Autowired UserRepository userRepository;
-    @Autowired com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
     @Test
     void ownerCanSubmitDraftForModeration() throws Exception {
@@ -105,8 +104,7 @@ class ModerationControllerTest {
                 .andExpect(jsonPath("$[0].version").value(currentVersion))
                 .andReturn();
 
-        long versionShownToModerator = objectMapper.readTree(queueResponse.getResponse().getContentAsString())
-                .get(0).get("version").asLong();
+        long versionShownToModerator = currentVersion;
 
         mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
                         .with(user(principal(moderator)))
