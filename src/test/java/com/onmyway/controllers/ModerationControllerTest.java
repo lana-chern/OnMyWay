@@ -434,7 +434,7 @@ class ModerationControllerTest {
         mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
                         .with(user(principal(moderator)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\\"version\\":null}"))
+                        .content("{\"version\":null}"))
                 .andExpect(status().isBadRequest());
 
         Place persisted = placeRepository.findById(place.getId()).orElseThrow();
@@ -454,7 +454,7 @@ class ModerationControllerTest {
         mockMvc.perform(post("/api/moderation/places/{id}/reject", place.getId())
                         .with(user(principal(moderator)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\\"version\\":" + reviewedVersion + ",\\"reason\\":\\"Outdated details\\"}"))
+                        .content("{\"version\":" + reviewedVersion + ",\"reason\":\"Outdated details\"}"))
                 .andExpect(status().isConflict());
 
         Place persisted = placeRepository.findById(place.getId()).orElseThrow();
