@@ -87,6 +87,40 @@ class ModerationControllerTest {
     }
 
     @Test
+    void moderationQueueReturnsLatestPlaceVersionAndThatVersionCanBePublished() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("moderation-queue-version-owner@example.com", Role.ORGANIZER));
+        User moderator = userRepository.saveAndFlush(testUser("moderation-queue-version-mod@example.com", Role.MODERATOR));
+        Place place = placeRepository.saveAndFlush(place(owner, "Original pending place", PlaceStatus.PENDING_MODERATION));
+
+        place.setName("Updated by organizer");
+        placeRepository.saveAndFlush(place);
+        long currentVersion = placeRepository.findById(place.getId()).orElseThrow().getVersion();
+
+        var queueResponse = mockMvc.perform(get("/api/moderation/places/pending")
+                        .with(user(principal(moderator))))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        var queue = new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree(queueResponse.getResponse().getContentAsString());
+        var placeInQueue = java.util.stream.StreamSupport.stream(queue.spliterator(), false)
+                .filter(item -> item.get("id").asLong() == place.getId())
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(placeInQueue.get("name").asText()).isEqualTo("Updated by organizer");
+        assertThat(placeInQueue.get("version").asLong()).isEqualTo(currentVersion);
+        long versionShownToModerator = placeInQueue.get("version").asLong();
+
+        mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
+                        .with(user(principal(moderator)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"version\":" + versionShownToModerator + "}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PUBLISHED"));
+    }
+
+    @Test
     void administratorCanAccessModerationQueue() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("moderation-admin-queue-owner@example.com", Role.ORGANIZER));
         User admin = userRepository.saveAndFlush(testUser("moderation-admin-queue@example.com", Role.ADMIN));
@@ -104,7 +138,9 @@ class ModerationControllerTest {
         Place place = placeRepository.saveAndFlush(place(owner, "Pending place", PlaceStatus.PENDING_MODERATION));
 
         mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
-                        .with(user(principal(moderator))))
+                        .with(user(principal(moderator)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"version\":" + place.getVersion() + "}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("PUBLISHED"))
                 .andExpect(jsonPath("$.version").value(1));
@@ -119,7 +155,9 @@ class ModerationControllerTest {
         Place place = placeRepository.saveAndFlush(place(owner, "Admin pending place", PlaceStatus.PENDING_MODERATION));
 
         mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
-                        .with(user(principal(admin))))
+                        .with(user(principal(admin)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"version\":" + place.getVersion() + "}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("PUBLISHED"));
 
@@ -135,7 +173,7 @@ class ModerationControllerTest {
         mockMvc.perform(post("/api/moderation/places/{id}/reject", place.getId())
                         .with(user(principal(moderator)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"reason\":\"Missing opening hours\"}"))
+                        .content("{\"version\":" + placeRepository.findById(place.getId()).orElseThrow().getVersion() + ",\"reason\":\"Missing opening hours\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("REJECTED"))
                 .andExpect(jsonPath("$.rejectionReason").value("Missing opening hours"));
@@ -163,7 +201,7 @@ class ModerationControllerTest {
         mockMvc.perform(post("/api/moderation/places/{id}/reject", place.getId())
                         .with(user(principal(moderator)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"reason\":\"   \"}"))
+                        .content("{\"version\":" + place.getVersion() + ",\"reason\":\"   \"}"))
                 .andExpect(status().isBadRequest());
 
         assertThat(placeRepository.findById(place.getId()).orElseThrow().getStatus())
@@ -179,13 +217,13 @@ class ModerationControllerTest {
         mockMvc.perform(post("/api/moderation/places/{id}/reject", place.getId())
                         .with(user(principal(moderator)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{}"))
+                        .content("{\"version\":" + place.getVersion() + "}"))
                 .andExpect(status().isBadRequest());
 
         mockMvc.perform(post("/api/moderation/places/{id}/reject", place.getId())
                         .with(user(principal(moderator)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"reason\":null}"))
+                        .content("{\"version\":" + place.getVersion() + ",\"reason\":null}"))
                 .andExpect(status().isBadRequest());
 
         assertThat(placeRepository.findById(place.getId()).orElseThrow().getStatus())
@@ -203,7 +241,7 @@ class ModerationControllerTest {
         mockMvc.perform(post("/api/moderation/places/{id}/reject", place.getId())
                         .with(user(principal(moderator)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"reason\":\"" + tooLongReason + "\"}"))
+                        .content("{\"version\":" + place.getVersion() + ",\"reason\":\"" + tooLongReason + "\"}"))
                 .andExpect(status().isBadRequest());
 
         assertThat(placeRepository.findById(place.getId()).orElseThrow().getStatus())
@@ -222,7 +260,7 @@ class ModerationControllerTest {
         mockMvc.perform(post("/api/moderation/places/{id}/reject", place.getId())
                         .with(user(principal(moderator)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"reason\":\"" + reasonWithSurroundingWhitespace + "\"}"))
+                        .content("{\"version\":" + place.getVersion() + ",\"reason\":\"" + reasonWithSurroundingWhitespace + "\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("REJECTED"))
                 .andExpect(jsonPath("$.rejectionReason").value(maxLengthReason));
@@ -252,7 +290,9 @@ class ModerationControllerTest {
         placeRepository.saveAndFlush(place);
 
         mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
-                        .with(user(principal(moderator))))
+                        .with(user(principal(moderator)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"version\":" + placeRepository.findById(place.getId()).orElseThrow().getVersion() + "}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("PUBLISHED"))
                 .andExpect(jsonPath("$.rejectionReason").value(org.hamcrest.Matchers.nullValue()));
@@ -294,7 +334,9 @@ class ModerationControllerTest {
         Place place = placeRepository.saveAndFlush(place(owner, "Draft place", PlaceStatus.DRAFT));
 
         mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
-                        .with(user(principal(moderator))))
+                        .with(user(principal(moderator)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"version\":" + place.getVersion() + "}"))
                 .andExpect(status().isConflict());
 
         assertThat(placeRepository.findById(place.getId()).orElseThrow().getStatus()).isEqualTo(PlaceStatus.DRAFT);
@@ -307,7 +349,9 @@ class ModerationControllerTest {
         Place place = placeRepository.saveAndFlush(place(owner, "Already published", PlaceStatus.PUBLISHED));
 
         mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
-                        .with(user(principal(moderator))))
+                        .with(user(principal(moderator)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"version\":" + place.getVersion() + "}"))
                 .andExpect(status().isConflict());
 
         assertThat(placeRepository.findById(place.getId()).orElseThrow().getStatus()).isEqualTo(PlaceStatus.PUBLISHED);
@@ -372,7 +416,9 @@ class ModerationControllerTest {
                     throw new IllegalStateException("Timed out waiting to start publish request");
                 }
                 return mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
-                                .with(user(principal(moderator))))
+                                .with(user(principal(moderator)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"version\":" + place.getVersion() + "}"))
                         .andReturn().getResponse().getStatus();
             });
             Future<Integer> rejectStatus = executor.submit(() -> {
@@ -383,7 +429,7 @@ class ModerationControllerTest {
                 return mockMvc.perform(post("/api/moderation/places/{id}/reject", place.getId())
                                 .with(user(principal(secondModerator)))
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content("{\"reason\":\"Concurrent rejection\"}"))
+                        .content("{\"version\":" + place.getVersion() + ",\"reason\":\"Concurrent rejection\"}"))
                         .andReturn().getResponse().getStatus();
             });
 
@@ -405,6 +451,71 @@ class ModerationControllerTest {
         } finally {
             executor.shutdownNow();
         }
+    }
+
+    @Test
+    void publishRequiresNonNullVersion() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("moderation-missing-version-owner@example.com", Role.ORGANIZER));
+        User moderator = userRepository.saveAndFlush(testUser("moderation-missing-version-mod@example.com", Role.MODERATOR));
+        Place place = placeRepository.saveAndFlush(place(owner, "Pending place", PlaceStatus.PENDING_MODERATION));
+
+        mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
+                        .with(user(principal(moderator)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
+                        .with(user(principal(moderator)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"version\":null}"))
+                .andExpect(status().isBadRequest());
+
+        Place persisted = placeRepository.findById(place.getId()).orElseThrow();
+        assertThat(persisted.getStatus()).isEqualTo(PlaceStatus.PENDING_MODERATION);
+    }
+
+    @Test
+    void staleVersionCannotRejectPlaceAfterOrganizerEdit() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("moderation-stale-reject-owner@example.com", Role.ORGANIZER));
+        User moderator = userRepository.saveAndFlush(testUser("moderation-stale-reject-mod@example.com", Role.MODERATOR));
+        Place place = placeRepository.saveAndFlush(place(owner, "Pending place", PlaceStatus.PENDING_MODERATION));
+        long reviewedVersion = place.getVersion();
+
+        place.setName("Updated by organizer");
+        placeRepository.saveAndFlush(place);
+
+        mockMvc.perform(post("/api/moderation/places/{id}/reject", place.getId())
+                        .with(user(principal(moderator)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"version\":" + reviewedVersion + ",\"reason\":\"Outdated details\"}"))
+                .andExpect(status().isConflict());
+
+        Place persisted = placeRepository.findById(place.getId()).orElseThrow();
+        assertThat(persisted.getStatus()).isEqualTo(PlaceStatus.PENDING_MODERATION);
+        assertThat(persisted.getName()).isEqualTo("Updated by organizer");
+        assertThat(persisted.getRejectionReason()).isNull();
+    }
+
+    @Test
+    void staleVersionCannotPublishPlaceAfterOrganizerEdit() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("moderation-stale-owner@example.com", Role.ORGANIZER));
+        User moderator = userRepository.saveAndFlush(testUser("moderation-stale-mod@example.com", Role.MODERATOR));
+        Place place = placeRepository.saveAndFlush(place(owner, "Pending place", PlaceStatus.PENDING_MODERATION));
+        long reviewedVersion = place.getVersion();
+
+        place.setName("Updated by organizer");
+        placeRepository.saveAndFlush(place);
+
+        mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
+                        .with(user(principal(moderator)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"version\":" + reviewedVersion + "}"))
+                .andExpect(status().isConflict());
+
+        Place persisted = placeRepository.findById(place.getId()).orElseThrow();
+        assertThat(persisted.getStatus()).isEqualTo(PlaceStatus.PENDING_MODERATION);
+        assertThat(persisted.getName()).isEqualTo("Updated by organizer");
     }
 
     private OnMyWayUserDetails principal(User user) {

@@ -4,6 +4,7 @@ import com.onmyway.api.PlaceService;
 import com.onmyway.auth.OnMyWayUserDetails;
 import com.onmyway.api.dto.PlaceResponse;
 import com.onmyway.api.dto.RejectPlaceRequest;
+import com.onmyway.api.dto.PublishPlaceRequest;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -33,19 +34,22 @@ public class ModerationController {
     public PlaceResponse publish(
             @Parameter(description = "Unique ID of the pending place submission to publish.", example = "42")
             @PathVariable Long id,
+            @RequestBody(description = "Expected version of the place reviewed by the moderator.",
+                    required = true, content = @Content(schema = @Schema(implementation = PublishPlaceRequest.class)))
+            @org.springframework.web.bind.annotation.RequestBody PublishPlaceRequest request,
             @AuthenticationPrincipal OnMyWayUserDetails principal) {
-        return placeService.publish(id, canModerate(principal));
+        return placeService.publish(id, canModerate(principal), request.version());
     }
 
     @PostMapping("/{id}/reject")
     public PlaceResponse reject(
             @Parameter(description = "Unique ID of the pending place submission to reject.", example = "42")
             @PathVariable Long id,
-            @RequestBody(description = "Rejection reason that will be associated with the place submission.",
+            @RequestBody(description = "Expected version and rejection reason for the reviewed submission.",
                     required = true, content = @Content(schema = @Schema(implementation = RejectPlaceRequest.class)))
             @org.springframework.web.bind.annotation.RequestBody RejectPlaceRequest request,
             @AuthenticationPrincipal OnMyWayUserDetails principal) {
-        return placeService.reject(id, canModerate(principal), request.reason());
+        return placeService.reject(id, canModerate(principal), request.version(), request.reason());
     }
 
     private boolean canModerate(OnMyWayUserDetails principal) {
