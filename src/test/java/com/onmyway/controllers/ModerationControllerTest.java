@@ -99,12 +99,18 @@ class ModerationControllerTest {
         var queueResponse = mockMvc.perform(get("/api/moderation/places/pending")
                         .with(user(principal(moderator))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].id").value(place.getId().intValue()))
-                .andExpect(jsonPath("$[0].name").value("Updated by organizer"))
-                .andExpect(jsonPath("$[0].version").value(currentVersion))
                 .andReturn();
 
-        long versionShownToModerator = currentVersion;
+        var queue = new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree(queueResponse.getResponse().getContentAsString());
+        var placeInQueue = java.util.stream.StreamSupport.stream(queue.spliterator(), false)
+                .filter(item -> item.get("id").asLong() == place.getId())
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(placeInQueue.get("name").asText()).isEqualTo("Updated by organizer");
+        assertThat(placeInQueue.get("version").asLong()).isEqualTo(currentVersion);
+        long versionShownToModerator = placeInQueue.get("version").asLong();
 
         mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
                         .with(user(principal(moderator)))
