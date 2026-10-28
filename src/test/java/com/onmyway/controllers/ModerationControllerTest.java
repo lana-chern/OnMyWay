@@ -420,6 +420,50 @@ class ModerationControllerTest {
     }
 
     @Test
+    void publishRequiresNonNullVersion() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("moderation-missing-version-owner@example.com", Role.ORGANIZER));
+        User moderator = userRepository.saveAndFlush(testUser("moderation-missing-version-mod@example.com", Role.MODERATOR));
+        Place place = placeRepository.saveAndFlush(place(owner, "Pending place", PlaceStatus.PENDING_MODERATION));
+
+        mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
+                        .with(user(principal(moderator)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
+                        .with(user(principal(moderator)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\\"version\\":null}"))
+                .andExpect(status().isBadRequest());
+
+        Place persisted = placeRepository.findById(place.getId()).orElseThrow();
+        assertThat(persisted.getStatus()).isEqualTo(PlaceStatus.PENDING_MODERATION);
+    }
+
+    @Test
+    void staleVersionCannotRejectPlaceAfterOrganizerEdit() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("moderation-stale-reject-owner@example.com", Role.ORGANIZER));
+        User moderator = userRepository.saveAndFlush(testUser("moderation-stale-reject-mod@example.com", Role.MODERATOR));
+        Place place = placeRepository.saveAndFlush(place(owner, "Pending place", PlaceStatus.PENDING_MODERATION));
+        long reviewedVersion = place.getVersion();
+
+        place.setName("Updated by organizer");
+        placeRepository.saveAndFlush(place);
+
+        mockMvc.perform(post("/api/moderation/places/{id}/reject", place.getId())
+                        .with(user(principal(moderator)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\\"version\\":" + reviewedVersion + ",\\"reason\\":\\"Outdated details\\"}"))
+                .andExpect(status().isConflict());
+
+        Place persisted = placeRepository.findById(place.getId()).orElseThrow();
+        assertThat(persisted.getStatus()).isEqualTo(PlaceStatus.PENDING_MODERATION);
+        assertThat(persisted.getName()).isEqualTo("Updated by organizer");
+        assertThat(persisted.getRejectionReason()).isNull();
+    }
+
+    @Test
     void staleVersionCannotPublishPlaceAfterOrganizerEdit() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("moderation-stale-owner@example.com", Role.ORGANIZER));
         User moderator = userRepository.saveAndFlush(testUser("moderation-stale-mod@example.com", Role.MODERATOR));
