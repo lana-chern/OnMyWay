@@ -40,6 +40,7 @@ class ModerationControllerTest {
     @Autowired CityRepository cityRepository;
     @Autowired PlaceRepository placeRepository;
     @Autowired UserRepository userRepository;
+    @Autowired com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
     @Test
     void ownerCanSubmitDraftForModeration() throws Exception {
@@ -84,6 +85,35 @@ class ModerationControllerTest {
                 .andExpect(jsonPath("$[*].id").value(org.hamcrest.Matchers.not(org.hamcrest.Matchers.hasItem(published.getId().intValue()))))
                 .andExpect(jsonPath("$[*].status").value(
                         org.hamcrest.Matchers.everyItem(org.hamcrest.Matchers.is("PENDING_MODERATION"))));
+    }
+
+    @Test
+    void moderationQueueReturnsLatestPlaceVersionAndThatVersionCanBePublished() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("moderation-queue-version-owner@example.com", Role.ORGANIZER));
+        User moderator = userRepository.saveAndFlush(testUser("moderation-queue-version-mod@example.com", Role.MODERATOR));
+        Place place = placeRepository.saveAndFlush(place(owner, "Original pending place", PlaceStatus.PENDING_MODERATION));
+
+        place.setName("Updated by organizer");
+        placeRepository.saveAndFlush(place);
+        long currentVersion = placeRepository.findById(place.getId()).orElseThrow().getVersion();
+
+        var queueResponse = mockMvc.perform(get("/api/moderation/places/pending")
+                        .with(user(principal(moderator))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(place.getId().intValue()))
+                .andExpect(jsonPath("$[0].name").value("Updated by organizer"))
+                .andExpect(jsonPath("$[0].version").value(currentVersion))
+                .andReturn();
+
+        long versionShownToModerator = objectMapper.readTree(queueResponse.getResponse().getContentAsString())
+                .get(0).get("version").asLong();
+
+        mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
+                        .with(user(principal(moderator)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\\"version\\":" + versionShownToModerator + "}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PUBLISHED"));
     }
 
     @Test
