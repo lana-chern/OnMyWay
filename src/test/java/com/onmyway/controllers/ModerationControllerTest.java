@@ -111,7 +111,7 @@ class ModerationControllerTest {
         mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
                         .with(user(principal(moderator)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\\"version\\":" + versionShownToModerator + "}"))
+                        .content("{\"version\":" + versionShownToModerator + "}")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("PUBLISHED"));
     }
