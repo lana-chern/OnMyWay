@@ -165,24 +165,35 @@ class PostgresMigrationTest {
                         """);
                 statement.execute("""
                         INSERT INTO places (
-                            city_id, name, description, latitude, longitude, status,
-                            rejection_reason, created_at, updated_at
+                            city_id, name, description, latitude, longitude, status, created_at, updated_at
                         )
                         SELECT c.id, p.name, 'Legacy ' || p.name, 52.370000, 4.895000, p.status,
-                               p.rejection_reason, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                               CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
                         FROM cities c
                         CROSS JOIN (VALUES
-                            ('Draft place', 'DRAFT', NULL::TEXT),
-                            ('Pending place', 'PENDING_MODERATION', NULL::TEXT),
-                            ('Published place', 'PUBLISHED', NULL::TEXT),
-                            ('Rejected place', 'REJECTED', 'Please add missing details'),
-                            ('Archived place', 'ARCHIVED', NULL::TEXT)
-                        ) AS p(name, status, rejection_reason)
+                            ('Draft place', 'DRAFT'),
+                            ('Pending place', 'PENDING_MODERATION'),
+                            ('Published place', 'PUBLISHED'),
+                            ('Rejected place', 'REJECTED'),
+                            ('Archived place', 'ARCHIVED')
+                        ) AS p(name, status)
                         WHERE c.name = 'Status migration city'
                         """);
             }
 
-            flyway(schema).migrate();
+            // Build the real pre-V10 schema first; rejection_reason and owner_id are added by earlier migrations.
+            flyway(schema, "9").migrate();
+            try (Connection connection = connection(); Statement statement = connection.createStatement()) {
+                statement.execute("SET search_path TO \\"" + schema + "\\"");
+                statement.execute("""
+                        UPDATE places
+                        SET rejection_reason = 'Please add missing details'
+                        WHERE name = 'Rejected place'
+                        """);
+            }
+
+            var result = flyway(schema).migrate();
+            assertEquals(1, result.migrationsExecuted, "Only V10 should run after targeting V9");
 
             assertEquals(5L, queryLong(schema, "SELECT COUNT(*) FROM place_revisions"));
             assertEquals(1L, queryLong(schema, """
