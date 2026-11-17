@@ -594,6 +594,43 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.accessToken").isString());
     }
 
+    @Test
+    void existingJwtUsesCurrentRolesAfterRoleChange() throws Exception {
+        User user = registerUser("jwt-role-change@example.com", "password123", "Role Change");
+        user.getRoles().clear();
+        user.getRoles().add(Role.ORGANIZER);
+        userRepository.saveAndFlush(user);
+
+        String token = jwtService.generateToken(user.getId(), user.getTokenVersion());
+
+        mockMvc.perform(get("/api/places/999999/manage")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+
+        user.getRoles().clear();
+        user.getRoles().add(Role.USER);
+        userRepository.saveAndFlush(user);
+
+        mockMvc.perform(get("/api/places/999999/manage")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void moderatorJwtCannotAccessAdminOnlyDeleteEndpoint() throws Exception {
+        User moderator = registerUser("jwt-moderator@example.com", "password123", "Moderator");
+        moderator.getRoles().clear();
+        moderator.getRoles().add(Role.MODERATOR);
+        userRepository.saveAndFlush(moderator);
+
+        String token = jwtService.generateToken(moderator.getId(), moderator.getTokenVersion());
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .delete("/api/places/999999")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+    }
+
     private User registerUser(String email, String password, String displayName) throws Exception {
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
