@@ -1,6 +1,7 @@
 package com.onmyway.migrations;
 
 import org.flywaydb.core.Flyway;
+import org.flywaydb.core.api.MigrationVersion;
 import org.flywaydb.core.api.FlywayException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -12,6 +13,7 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.Instant;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -26,10 +28,10 @@ class PostgresMigrationTest {
             Flyway flyway = flyway(schema);
             var result = flyway.migrate();
 
-            assertEquals(8, result.migrationsExecuted);
+            assertEquals(9, result.migrationsExecuted);
             assertColumnExists(schema, "places", "owner_id");
-            assertEquals(8L, queryLong(schema,
-                    "SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE AND version IN ('1', '2', '3', '4', '5', '6', '7', '8')"));
+            assertEquals(9L, queryLong(schema,
+                    "SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE AND version IN ('1', '2', '3', '4', '5', '6', '7', '8', '9')"));
             assertEquals(0L, queryLong(schema, "SELECT COUNT(*) FROM users WHERE email = '" + LEGACY_EMAIL + "'"));
             assertTrue(hasConstraint(schema, "places", "fk_places_owner"));
             assertTrue(hasIndex(schema, "idx_places_owner_id"));
@@ -57,7 +59,7 @@ class PostgresMigrationTest {
 
             var result = flyway(schema).migrate();
 
-            assertEquals(7, result.migrationsExecuted, "V2 through V8 should run after baseline V1");
+            assertEquals(8, result.migrationsExecuted, "V2 through V9 should run after baseline V1");
             assertColumnExists(schema, "places", "owner_id");
             assertColumnIsNotNull(schema, "places", "owner_id");
             assertTrue(hasConstraint(schema, "places", "fk_places_owner"));
@@ -92,9 +94,71 @@ class PostgresMigrationTest {
                     "SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE AND version = '7'"));
             assertEquals(1L, queryLong(schema,
                     "SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE AND version = '8'"));
+            assertColumnExists(schema, "refresh_tokens", "family_expires_at");
+            assertColumnIsNotNull(schema, "refresh_tokens", "family_expires_at");
+            assertTrue(hasIndex(schema, "idx_refresh_tokens_family_expires_at"));
+            assertEquals(1L, queryLong(schema,
+                    "SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE AND version = '9'"));
         });
     }
 
+
+    @Test
+    void backfillsFamilyDeadlineFromEarliestTokenAndCapsLegacyExpiration() throws SQLException, IOException {
+        withIsolatedSchema("family_expiration", schema -> {
+            var resultBeforeV9 = flyway(schema, "8").migrate();
+            assertEquals(8, resultBeforeV9.migrationsExecuted);
+
+            UUID familyId = UUID.randomUUID();
+            Instant firstCreatedAt = Instant.parse("2026-01-01T00:00:00Z");
+            Instant secondCreatedAt = Instant.parse("2026-01-20T00:00:00Z");
+            Instant firstExpiresAt = Instant.parse("2026-01-31T00:00:00Z");
+            Instant secondExpiresAt = Instant.parse("2026-04-10T00:00:00Z");
+            Instant expectedFamilyExpiresAt = Instant.parse("2026-04-01T00:00:00Z");
+
+            try (Connection connection = connection(); Statement statement = connection.createStatement()) {
+                statement.execute("SET search_path TO \"" + schema + "\"");
+                statement.execute("""
+                        INSERT INTO users (email, password_hash, display_name, status, created_at, updated_at)
+                        VALUES ('family-migration@example.com', 'hash', 'Migration test', 'ACTIVE',
+                                TIMESTAMP WITH TIME ZONE '2025-12-01 00:00:00+00',
+                                TIMESTAMP WITH TIME ZONE '2025-12-01 00:00:00+00')
+                        """);
+                statement.execute("""
+                        INSERT INTO refresh_tokens (user_id, token_hash, expires_at, created_at, family_id, token_version)
+                        SELECT id, 'family-token-first', TIMESTAMP WITH TIME ZONE '%s',
+                               TIMESTAMP WITH TIME ZONE '%s', '%s', 0
+                        FROM users WHERE email = 'family-migration@example.com'
+                        """.formatted(firstExpiresAt, firstCreatedAt, familyId));
+                statement.execute("""
+                        INSERT INTO refresh_tokens (user_id, token_hash, expires_at, created_at, family_id, token_version)
+                        SELECT id, 'family-token-second', TIMESTAMP WITH TIME ZONE '%s',
+                               TIMESTAMP WITH TIME ZONE '%s', '%s', 0
+                        FROM users WHERE email = 'family-migration@example.com'
+                        """.formatted(secondExpiresAt, secondCreatedAt, familyId));
+            }
+
+            var resultAfterV9 = flyway(schema).migrate();
+            assertEquals(1, resultAfterV9.migrationsExecuted);
+
+            assertEquals(expectedFamilyExpiresAt.getEpochSecond(), queryLong(schema, """
+                    SELECT EXTRACT(EPOCH FROM family_expires_at)::BIGINT
+                    FROM refresh_tokens WHERE token_hash = 'family-token-first'
+                    """));
+            assertEquals(expectedFamilyExpiresAt.getEpochSecond(), queryLong(schema, """
+                    SELECT EXTRACT(EPOCH FROM family_expires_at)::BIGINT
+                    FROM refresh_tokens WHERE token_hash = 'family-token-second'
+                    """));
+            assertEquals(firstExpiresAt.getEpochSecond(), queryLong(schema, """
+                    SELECT EXTRACT(EPOCH FROM expires_at)::BIGINT
+                    FROM refresh_tokens WHERE token_hash = 'family-token-first'
+                    """), "An idle expiration before the family deadline must remain unchanged");
+            assertEquals(expectedFamilyExpiresAt.getEpochSecond(), queryLong(schema, """
+                    SELECT EXTRACT(EPOCH FROM expires_at)::BIGINT
+                    FROM refresh_tokens WHERE token_hash = 'family-token-second'
+                    """), "An idle expiration beyond the family deadline must be capped");
+        });
+    }
 
     @Test
     void failsWhenReservedPlaceholderEmailIsAlreadyInUse() throws SQLException, IOException {
@@ -132,15 +196,22 @@ class PostgresMigrationTest {
     }
 
     private Flyway flyway(String schema) {
-        return Flyway.configure()
+        return flyway(schema, null);
+    }
+
+    private Flyway flyway(String schema, String target) {
+        var configuration = Flyway.configure()
                 .dataSource(requiredEnv("MIGRATION_TEST_JDBC_URL"),
                         requiredEnv("MIGRATION_TEST_DB_USERNAME"), requiredEnv("MIGRATION_TEST_DB_PASSWORD"))
                 .defaultSchema(schema)
                 .schemas(schema)
                 .baselineOnMigrate(true)
                 .baselineVersion("1")
-                .locations("classpath:db/migration")
-                .load();
+                .locations("classpath:db/migration");
+        if (target != null) {
+            configuration.target(MigrationVersion.fromVersion(target));
+        }
+        return configuration.load();
     }
 
     private void createLegacySchema(String schema) throws SQLException, IOException {

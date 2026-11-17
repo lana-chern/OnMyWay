@@ -1,5 +1,6 @@
 package com.onmyway.auth;
 
+import com.onmyway.data.entities.RefreshToken;
 import com.onmyway.data.entities.User;
 import com.onmyway.data.repositories.RefreshTokenRepository;
 import com.onmyway.data.repositories.UserRepository;
@@ -68,6 +69,34 @@ class RefreshTokenConcurrencyIntegrationTest {
         jdbcTemplate.update("delete from refresh_tokens");
         jdbcTemplate.update("delete from user_roles");
         jdbcTemplate.update("delete from users");
+    }
+
+    @Test
+    void cleanupRetainsExpiredTokenUntilItsFamilyAbsoluteExpiration() {
+        User user = new User();
+        user.setEmail("family-cleanup@example.com");
+        user.setPasswordHash("not-used-by-this-test");
+        user.setDisplayName("Cleanup test");
+        userRepository.saveAndFlush(user);
+
+        Instant now = Instant.now();
+        Instant familyExpiresAt = now.plusSeconds(86_400);
+        RefreshToken expiredIdleToken = new RefreshToken(
+                user,
+                "expired-idle-token-hash",
+                now.minusSeconds(1),
+                java.util.UUID.randomUUID(),
+                familyExpiresAt
+        );
+        expiredIdleToken.revoke(now.minusSeconds(2));
+        refreshTokenRepository.saveAndFlush(expiredIdleToken);
+
+        assertThat(refreshTokenRepository.deleteExpiredTokensBatch(now, 500)).isZero();
+        assertThat(refreshTokenRepository.findById(expiredIdleToken.getId())).isPresent();
+
+        assertThat(refreshTokenRepository.deleteExpiredTokensBatch(familyExpiresAt.plusSeconds(1), 500))
+                .isEqualTo(1);
+        assertThat(refreshTokenRepository.findById(expiredIdleToken.getId())).isEmpty();
     }
 
     @Test

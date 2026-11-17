@@ -24,7 +24,7 @@ class RefreshTokenServiceTest {
     private final RefreshTokenRepository refreshTokenRepository = mock(RefreshTokenRepository.class);
     private final UserRepository userRepository = mock(UserRepository.class);
     private final RefreshTokenService service = new RefreshTokenService(
-            refreshTokenRepository, userRepository, 60_000L
+            refreshTokenRepository, userRepository, 60_000L, 7_776_000_000L
     );
 
     @Test
@@ -69,6 +69,32 @@ class RefreshTokenServiceTest {
         assertThat(savedTokens).allSatisfy(token ->
                 assertThat(token.getFamilyId()).isEqualTo(familyId));
         verify(refreshTokenRepository).lockFamily(familyId);
+    }
+
+    @Test
+    void rotationKeepsTheOriginalFamilyDeadlineAndCapsReplacementExpiration() {
+        User user = activeUser();
+        UUID familyId = UUID.randomUUID();
+        Instant familyExpiresAt = Instant.now().plusSeconds(30);
+        RefreshToken currentToken = new RefreshToken(
+                user, "stored-hash", familyExpiresAt, familyId, familyExpiresAt
+        );
+        when(refreshTokenRepository.findFamilyIdByTokenHash(anyString()))
+                .thenReturn(Optional.of(familyId));
+        when(refreshTokenRepository.findByTokenHashForUpdate(anyString()))
+                .thenReturn(Optional.of(currentToken));
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+
+        service.rotate("current-token");
+
+        org.mockito.ArgumentCaptor<RefreshToken> tokenCaptor =
+                org.mockito.ArgumentCaptor.forClass(RefreshToken.class);
+        verify(refreshTokenRepository, times(2)).save(tokenCaptor.capture());
+        RefreshToken replacement = tokenCaptor.getAllValues().get(1);
+
+        assertThat(replacement.getFamilyId()).isEqualTo(familyId);
+        assertThat(replacement.getFamilyExpiresAt()).isEqualTo(familyExpiresAt);
+        assertThat(replacement.getExpiresAt()).isEqualTo(familyExpiresAt);
     }
 
     @Test

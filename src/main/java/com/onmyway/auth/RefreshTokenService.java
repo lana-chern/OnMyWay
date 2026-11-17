@@ -14,6 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.HexFormat;
@@ -28,25 +29,34 @@ public class RefreshTokenService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final UserRepository userRepository;
     private final long expirationMs;
+    private final Duration familyAbsoluteLifetime;
 
     public RefreshTokenService(
             RefreshTokenRepository refreshTokenRepository,
             UserRepository userRepository,
-            @Value("${omw.jwt.refresh-expiration-ms:2592000000}") long expirationMs
+            @Value("${omw.jwt.refresh-expiration-ms:2592000000}") long expirationMs,
+            @Value("${omw.jwt.refresh-family-absolute-expiration-ms:7776000000}") long familyAbsoluteExpirationMs
     ) {
         if (expirationMs <= 0) {
             throw new IllegalStateException("OMW_JWT_REFRESH_EXPIRATION_MS must be greater than 0");
         }
+        if (familyAbsoluteExpirationMs <= 0) {
+            throw new IllegalStateException("OMW_JWT_REFRESH_FAMILY_ABSOLUTE_EXPIRATION_MS must be greater than 0");
+        }
         this.refreshTokenRepository = refreshTokenRepository;
         this.userRepository = userRepository;
         this.expirationMs = expirationMs;
+        this.familyAbsoluteLifetime = Duration.ofMillis(familyAbsoluteExpirationMs);
     }
 
     @Transactional
     public String issue(User user) {
+        Instant now = Instant.now();
+        Instant familyExpiresAt = now.plus(familyAbsoluteLifetime);
+        Instant tokenExpiresAt = min(now.plusMillis(expirationMs), familyExpiresAt);
         String rawToken = generateRawToken();
         refreshTokenRepository.save(new RefreshToken(
-                user, hash(rawToken), Instant.now().plusMillis(expirationMs), UUID.randomUUID()
+                user, hash(rawToken), tokenExpiresAt, UUID.randomUUID(), familyExpiresAt
         ));
         return rawToken;
     }
@@ -97,8 +107,13 @@ public class RefreshTokenService {
         storedToken.revoke(now);
         refreshTokenRepository.save(storedToken);
         String replacement = generateRawToken();
+        Instant replacementExpiresAt = min(now.plusMillis(expirationMs), storedToken.getFamilyExpiresAt());
         refreshTokenRepository.save(new RefreshToken(
-                user, hash(replacement), now.plusMillis(expirationMs), storedToken.getFamilyId()
+                user,
+                hash(replacement),
+                replacementExpiresAt,
+                storedToken.getFamilyId(),
+                storedToken.getFamilyExpiresAt()
         ));
         return new RefreshGrant(user, replacement);
     }
@@ -120,8 +135,9 @@ public class RefreshTokenService {
     }
 
     /**
-     * Deletes expired tokens in small transactions to limit lock duration and database load.
-     * Revoked tokens are retained until their original expiry.
+     * Deletes complete families only after their absolute lifetime has ended.
+     * Keeping every token hash until then preserves replay detection for rotated tokens,
+     * even when an individual token's idle expiration has passed.
      */
     @Scheduled(
             fixedDelayString = "${omw.auth.refresh-token-cleanup-interval-ms:86400000}",
@@ -132,6 +148,10 @@ public class RefreshTokenService {
         do {
             deleted = refreshTokenRepository.deleteExpiredTokensBatch(Instant.now(), CLEANUP_BATCH_SIZE);
         } while (deleted == CLEANUP_BATCH_SIZE);
+    }
+
+    private Instant min(Instant first, Instant second) {
+        return first.isBefore(second) ? first : second;
     }
 
     private String generateRawToken() {
