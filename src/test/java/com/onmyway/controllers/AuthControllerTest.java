@@ -594,6 +594,54 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.accessToken").isString());
     }
 
+    @Test
+    void existingJwtUsesCurrentRolesAfterRoleChange() throws Exception {
+        User user = registerUser("jwt-role-change@example.com", "password123", "Role Change");
+        String token = jwtService.generateToken(user.getId(), user.getTokenVersion());
+
+        mockMvc.perform(get("/api/moderation/places/pending")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+
+        user.getRoles().clear();
+        user.getRoles().add(Role.MODERATOR);
+        userRepository.saveAndFlush(user);
+
+        mockMvc.perform(get("/api/moderation/places/pending")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+
+        user = userRepository.findById(user.getId()).orElseThrow();
+        user.getRoles().clear();
+        user.getRoles().add(Role.USER);
+        userRepository.saveAndFlush(user);
+
+        assertThat(userRepository.findById(user.getId()).orElseThrow().getRoles())
+                .containsExactly(Role.USER);
+
+        mockMvc.perform(get("/api/moderation/places/pending")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void moderatorJwtCannotAccessAdminOnlyDeleteEndpoint() throws Exception {
+        User moderator = registerUser("jwt-moderator@example.com", "password123", "Moderator");
+        moderator.getRoles().clear();
+        moderator.getRoles().add(Role.MODERATOR);
+        userRepository.saveAndFlush(moderator);
+
+        moderator = userRepository.findById(moderator.getId()).orElseThrow();
+        assertThat(moderator.getRoles()).containsExactly(Role.MODERATOR);
+
+        String token = jwtService.generateToken(moderator.getId(), moderator.getTokenVersion());
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .delete("/api/places/999999")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+    }
+
     private User registerUser(String email, String password, String displayName) throws Exception {
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
