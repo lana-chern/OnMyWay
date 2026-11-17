@@ -82,9 +82,10 @@ public class AuthService {
         User user = userRepository.findById(principal.getId())
                 .orElseThrow(() -> new InvalidAuthenticationException("Invalid email or password"));
 
+        RefreshTokenService.RefreshGrant grant = refreshTokenService.issue(user);
         return new LoginResponse(
-                jwtService.generateToken(user.getId(), user.getTokenVersion()),
-                refreshTokenService.issue(user),
+                jwtService.generateToken(user.getId(), user.getTokenVersion(), grant.familyId()),
+                grant.refreshToken(),
                 toResponse(user)
         );
     }
@@ -93,7 +94,7 @@ public class AuthService {
         RefreshTokenService.RefreshGrant grant = refreshTokenService.rotate(rawRefreshToken);
         User user = grant.user();
         return new LoginResponse(
-                jwtService.generateToken(user.getId(), user.getTokenVersion()),
+                jwtService.generateToken(user.getId(), user.getTokenVersion(), grant.familyId()),
                 grant.refreshToken(),
                 toResponse(user)
         );
