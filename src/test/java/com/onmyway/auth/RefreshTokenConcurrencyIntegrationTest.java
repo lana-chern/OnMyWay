@@ -189,7 +189,7 @@ class RefreshTokenConcurrencyIntegrationTest {
         user.setPasswordHash("not-used-by-this-test");
         user.setDisplayName("Concurrency test");
         userRepository.saveAndFlush(user);
-        return refreshTokenService.issue(user);
+        return refreshTokenService.issue(user).refreshToken();
     }
 
     private int countActiveTokens(java.util.UUID familyId) {
