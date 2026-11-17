@@ -88,6 +88,7 @@ class RefreshTokenConcurrencyIntegrationTest {
                 java.util.UUID.randomUUID(),
                 familyExpiresAt
         );
+        expiredIdleToken.revoke(now.minusSeconds(2));
         refreshTokenRepository.saveAndFlush(expiredIdleToken);
 
         assertThat(refreshTokenRepository.deleteExpiredTokensBatch(now, 500)).isZero();
