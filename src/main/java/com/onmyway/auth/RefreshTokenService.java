@@ -25,7 +25,6 @@ public class RefreshTokenService {
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final int TOKEN_BYTES = 32;
     private static final int CLEANUP_BATCH_SIZE = 500;
-    private static final Duration DEFAULT_FAMILY_ABSOLUTE_LIFETIME = Duration.ofDays(90);
 
     private final RefreshTokenRepository refreshTokenRepository;
     private final UserRepository userRepository;
@@ -48,16 +47,6 @@ public class RefreshTokenService {
         this.userRepository = userRepository;
         this.expirationMs = expirationMs;
         this.familyAbsoluteLifetime = Duration.ofMillis(familyAbsoluteExpirationMs);
-    }
-
-    // Keeps unit-test construction concise; Spring uses the public, configured constructor.
-    RefreshTokenService(
-            RefreshTokenRepository refreshTokenRepository,
-            UserRepository userRepository,
-            long expirationMs
-    ) {
-        this(refreshTokenRepository, userRepository, expirationMs,
-                DEFAULT_FAMILY_ABSOLUTE_LIFETIME.toMillis());
     }
 
     @Transactional
