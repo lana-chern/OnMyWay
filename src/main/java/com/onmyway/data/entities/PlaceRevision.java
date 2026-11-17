@@ -41,7 +41,7 @@ public class PlaceRevision {
     private BigDecimal longitude;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 32)
     private PlaceRevisionStatus status;
 
     @Column(name = "rejection_reason", columnDefinition = "TEXT")
