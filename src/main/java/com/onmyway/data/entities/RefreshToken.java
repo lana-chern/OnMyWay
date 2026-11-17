@@ -32,6 +32,9 @@ public class RefreshToken {
     @Column(name = "expires_at", nullable = false)
     private Instant expiresAt;
 
+    @Column(name = "family_expires_at", nullable = false, updatable = false)
+    private Instant familyExpiresAt;
+
     @Column(name = "revoked_at")
     private Instant revokedAt;
 
@@ -39,14 +42,28 @@ public class RefreshToken {
     private Instant createdAt;
 
     public RefreshToken(User user, String tokenHash, Instant expiresAt) {
-        this(user, tokenHash, expiresAt, UUID.randomUUID());
+        this(user, tokenHash, expiresAt, UUID.randomUUID(), expiresAt);
     }
 
     public RefreshToken(User user, String tokenHash, Instant expiresAt, UUID familyId) {
+        this(user, tokenHash, expiresAt, familyId, expiresAt);
+    }
+
+    public RefreshToken(
+            User user,
+            String tokenHash,
+            Instant expiresAt,
+            UUID familyId,
+            Instant familyExpiresAt
+    ) {
+        if (familyExpiresAt == null || expiresAt == null || expiresAt.isAfter(familyExpiresAt)) {
+            throw new IllegalArgumentException("Token expiration must not exceed family expiration");
+        }
         this.user = user;
         this.tokenHash = tokenHash;
         this.expiresAt = expiresAt;
         this.familyId = familyId;
+        this.familyExpiresAt = familyExpiresAt;
         this.tokenVersion = user.getTokenVersion();
     }
 
@@ -56,7 +73,7 @@ public class RefreshToken {
     }
 
     public boolean isUsableAt(Instant now) {
-        return revokedAt == null && expiresAt.isAfter(now);
+        return revokedAt == null && expiresAt.isAfter(now) && familyExpiresAt.isAfter(now);
     }
 
     public boolean isRevoked() {
