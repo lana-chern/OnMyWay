@@ -472,7 +472,7 @@ class ModerationControllerTest {
                 return mockMvc.perform(put("/api/places/{id}", place.getId())
                                 .with(user(principal(owner)))
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content("{\\"version\\":0,\\"name\\":\\"Updated by organizer\\",\\"latitude\\":52.360000,\\"longitude\\":4.885200}"))
+                                .content("{\"version\":0,\"name\":\"Updated by organizer\",\"latitude\":52.360000,\"longitude\":4.885200}"))
                         .andReturn().getResponse().getStatus();
             });
             Future<Integer> publishStatus = executor.submit(() -> {
@@ -483,7 +483,7 @@ class ModerationControllerTest {
                 return mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
                                 .with(user(principal(moderator)))
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content("{\\"version\\":0}"))
+                                .content("{\"version\":0}"))
                         .andReturn().getResponse().getStatus();
             });
 
@@ -531,7 +531,7 @@ class ModerationControllerTest {
                 return mockMvc.perform(put("/api/places/{id}", place.getId())
                                 .with(user(principal(owner)))
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content("{\\"version\\":0,\\"name\\":\\"Updated by organizer\\",\\"latitude\\":52.360000,\\"longitude\\":4.885200}"))
+                                .content("{\"version\":0,\"name\":\"Updated by organizer\",\"latitude\":52.360000,\"longitude\":4.885200}"))
                         .andReturn().getResponse().getStatus();
             });
             Future<Integer> rejectStatus = executor.submit(() -> {
@@ -542,7 +542,7 @@ class ModerationControllerTest {
                 return mockMvc.perform(post("/api/moderation/places/{id}/reject", place.getId())
                                 .with(user(principal(moderator)))
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content("{\\"version\\":0,\\"reason\\":\\"Insufficient details\\"}"))
+                                .content("{\"version\":0,\"reason\":\"Insufficient details\"}"))
                         .andReturn().getResponse().getStatus();
             });
 
