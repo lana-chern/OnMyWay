@@ -22,6 +22,7 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.Set;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -69,8 +70,10 @@ class AuthServiceTest {
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
                 .thenReturn(authenticatedUser(user));
         when(userRepository.findById(1L)).thenReturn(java.util.Optional.of(user));
-        when(jwtService.generateToken(1L, user.getTokenVersion())).thenReturn("jwt-token");
-        when(refreshTokenService.issue(user)).thenReturn("refresh-token");
+        UUID familyId = UUID.randomUUID();
+        when(jwtService.generateToken(1L, user.getTokenVersion(), familyId)).thenReturn("jwt-token");
+        when(refreshTokenService.issue(user))
+                .thenReturn(new RefreshTokenService.RefreshGrant(user, "refresh-token", familyId));
         LoginResponse response = authService.login(request);
         assertThat(response.accessToken()).isEqualTo("jwt-token");
         assertThat(response.refreshToken()).isEqualTo("refresh-token");
@@ -78,7 +81,7 @@ class AuthServiceTest {
         assertThat(response.user().displayName()).isEqualTo("Alice");
         assertThat(response.user().roles()).containsExactly(Role.USER);
         verify(authenticationManager).authenticate(any(UsernamePasswordAuthenticationToken.class));
-        verify(jwtService).generateToken(1L, user.getTokenVersion());
+        verify(jwtService).generateToken(1L, user.getTokenVersion(), familyId);
         verify(refreshTokenService).issue(user);
     }
 
