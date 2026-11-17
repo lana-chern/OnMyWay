@@ -102,6 +102,63 @@ class PostgresMigrationTest {
 
 
     @Test
+    void backfillsFamilyDeadlineFromEarliestTokenAndCapsLegacyExpiration() throws SQLException, IOException {
+        withIsolatedSchema("family_expiration", schema -> {
+            var resultBeforeV9 = flyway(schema, "8").migrate();
+            assertEquals(8, resultBeforeV9.migrationsExecuted);
+
+            UUID familyId = UUID.randomUUID();
+            Instant firstCreatedAt = Instant.parse("2026-01-01T00:00:00Z");
+            Instant secondCreatedAt = Instant.parse("2026-01-20T00:00:00Z");
+            Instant firstExpiresAt = Instant.parse("2026-01-31T00:00:00Z");
+            Instant secondExpiresAt = Instant.parse("2026-04-10T00:00:00Z");
+            Instant expectedFamilyExpiresAt = Instant.parse("2026-04-01T00:00:00Z");
+
+            try (Connection connection = connection(); Statement statement = connection.createStatement()) {
+                statement.execute("SET search_path TO \"" + schema + "\"");
+                statement.execute("""
+                        INSERT INTO users (email, password_hash, display_name, status, created_at, updated_at)
+                        VALUES ('family-migration@example.com', 'hash', 'Migration test', 'ACTIVE',
+                                TIMESTAMP WITH TIME ZONE '2025-12-01 00:00:00+00',
+                                TIMESTAMP WITH TIME ZONE '2025-12-01 00:00:00+00')
+                        """);
+                statement.execute("""
+                        INSERT INTO refresh_tokens (user_id, token_hash, expires_at, created_at, family_id, token_version)
+                        SELECT id, 'family-token-first', TIMESTAMP WITH TIME ZONE '%s',
+                               TIMESTAMP WITH TIME ZONE '%s', '%s', 0
+                        FROM users WHERE email = 'family-migration@example.com'
+                        """.formatted(firstExpiresAt, firstCreatedAt, familyId));
+                statement.execute("""
+                        INSERT INTO refresh_tokens (user_id, token_hash, expires_at, created_at, family_id, token_version)
+                        SELECT id, 'family-token-second', TIMESTAMP WITH TIME ZONE '%s',
+                               TIMESTAMP WITH TIME ZONE '%s', '%s', 0
+                        FROM users WHERE email = 'family-migration@example.com'
+                        """.formatted(secondExpiresAt, secondCreatedAt, familyId));
+            }
+
+            var resultAfterV9 = flyway(schema).migrate();
+            assertEquals(1, resultAfterV9.migrationsExecuted);
+
+            assertEquals(expectedFamilyExpiresAt.getEpochSecond(), queryLong(schema, """
+                    SELECT EXTRACT(EPOCH FROM family_expires_at)::BIGINT
+                    FROM refresh_tokens WHERE token_hash = 'family-token-first'
+                    """));
+            assertEquals(expectedFamilyExpiresAt.getEpochSecond(), queryLong(schema, """
+                    SELECT EXTRACT(EPOCH FROM family_expires_at)::BIGINT
+                    FROM refresh_tokens WHERE token_hash = 'family-token-second'
+                    """));
+            assertEquals(firstExpiresAt.getEpochSecond(), queryLong(schema, """
+                    SELECT EXTRACT(EPOCH FROM expires_at)::BIGINT
+                    FROM refresh_tokens WHERE token_hash = 'family-token-first'
+                    """), "An idle expiration before the family deadline must remain unchanged");
+            assertEquals(expectedFamilyExpiresAt.getEpochSecond(), queryLong(schema, """
+                    SELECT EXTRACT(EPOCH FROM expires_at)::BIGINT
+                    FROM refresh_tokens WHERE token_hash = 'family-token-second'
+                    """), "An idle expiration beyond the family deadline must be capped");
+        });
+    }
+
+    @Test
     void failsWhenReservedPlaceholderEmailIsAlreadyInUse() throws SQLException, IOException {
         withIsolatedSchema("collision", schema -> {
             createLegacySchema(schema);
@@ -137,15 +194,22 @@ class PostgresMigrationTest {
     }
 
     private Flyway flyway(String schema) {
-        return Flyway.configure()
+        return flyway(schema, null);
+    }
+
+    private Flyway flyway(String schema, String target) {
+        var configuration = Flyway.configure()
                 .dataSource(requiredEnv("MIGRATION_TEST_JDBC_URL"),
                         requiredEnv("MIGRATION_TEST_DB_USERNAME"), requiredEnv("MIGRATION_TEST_DB_PASSWORD"))
                 .defaultSchema(schema)
                 .schemas(schema)
                 .baselineOnMigrate(true)
                 .baselineVersion("1")
-                .locations("classpath:db/migration")
-                .load();
+                .locations("classpath:db/migration");
+        if (target != null) {
+            configuration.target(target);
+        }
+        return configuration.load();
     }
 
     private void createLegacySchema(String schema) throws SQLException, IOException {
