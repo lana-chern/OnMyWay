@@ -30,7 +30,7 @@ class PostgresMigrationTest {
 
             assertEquals(10, result.migrationsExecuted);
             assertColumnExists(schema, "places", "owner_id");
-            assertEquals(9L, queryLong(schema,
+            assertEquals(10L, queryLong(schema,
                     "SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE AND version IN ('1', '2', '3', '4', '5', '6', '7', '8', '9', '10')"));
             assertEquals(0L, queryLong(schema, "SELECT COUNT(*) FROM users WHERE email = '" + LEGACY_EMAIL + "'"));
             assertTrue(hasConstraint(schema, "places", "fk_places_owner"));
@@ -41,6 +41,10 @@ class PostgresMigrationTest {
             assertTrue(hasIndex(schema, "uk_place_revisions_one_working_per_place"));
             assertTrue(hasIndex(schema, "uk_place_revisions_one_published_per_place"));
             assertTrue(hasIndex(schema, "idx_place_revisions_moderation_queue"));
+            assertEquals(0L, queryLong(schema, "SELECT COUNT(*) FROM place_revisions"));
+            assertEquals(0L, queryLong(schema, "SELECT COUNT(*) FROM place_revision_photos"));
+            assertEquals(0L, queryLong(schema, "SELECT COUNT(*) FROM place_revision_contacts"));
+            assertEquals(0L, queryLong(schema, "SELECT COUNT(*) FROM place_revision_opening_hours"));
         });
     }
 
