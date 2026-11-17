@@ -26,10 +26,10 @@ class PostgresMigrationTest {
             Flyway flyway = flyway(schema);
             var result = flyway.migrate();
 
-            assertEquals(8, result.migrationsExecuted);
+            assertEquals(9, result.migrationsExecuted);
             assertColumnExists(schema, "places", "owner_id");
             assertEquals(8L, queryLong(schema,
-                    "SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE AND version IN ('1', '2', '3', '4', '5', '6', '7', '8')"));
+                    "SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE AND version IN ('1', '2', '3', '4', '5', '6', '7', '8', '9')"));
             assertEquals(0L, queryLong(schema, "SELECT COUNT(*) FROM users WHERE email = '" + LEGACY_EMAIL + "'"));
             assertTrue(hasConstraint(schema, "places", "fk_places_owner"));
             assertTrue(hasIndex(schema, "idx_places_owner_id"));
@@ -57,7 +57,7 @@ class PostgresMigrationTest {
 
             var result = flyway(schema).migrate();
 
-            assertEquals(7, result.migrationsExecuted, "V2 through V8 should run after baseline V1");
+            assertEquals(8, result.migrationsExecuted, "V2 through V9 should run after baseline V1");
             assertColumnExists(schema, "places", "owner_id");
             assertColumnIsNotNull(schema, "places", "owner_id");
             assertTrue(hasConstraint(schema, "places", "fk_places_owner"));
@@ -92,6 +92,11 @@ class PostgresMigrationTest {
                     "SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE AND version = '7'"));
             assertEquals(1L, queryLong(schema,
                     "SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE AND version = '8'"));
+            assertColumnExists(schema, "refresh_tokens", "family_expires_at");
+            assertColumnIsNotNull(schema, "refresh_tokens", "family_expires_at");
+            assertTrue(hasIndex(schema, "idx_refresh_tokens_family_expires_at"));
+            assertEquals(1L, queryLong(schema,
+                    "SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE AND version = '9'"));
         });
     }
 
