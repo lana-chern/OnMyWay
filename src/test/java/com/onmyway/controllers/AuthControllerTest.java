@@ -597,21 +597,25 @@ class AuthControllerTest {
     @Test
     void existingJwtUsesCurrentRolesAfterRoleChange() throws Exception {
         User user = registerUser("jwt-role-change@example.com", "password123", "Role Change");
-        user.getRoles().clear();
-        user.getRoles().add(Role.ORGANIZER);
-        userRepository.saveAndFlush(user);
-
         String token = jwtService.generateToken(user.getId(), user.getTokenVersion());
 
-        mockMvc.perform(get("/api/places/999999/manage")
+        mockMvc.perform(get("/api/moderation/places/pending")
                         .header("Authorization", "Bearer " + token))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isForbidden());
+
+        user.getRoles().clear();
+        user.getRoles().add(Role.MODERATOR);
+        userRepository.saveAndFlush(user);
+
+        mockMvc.perform(get("/api/moderation/places/pending")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
 
         user.getRoles().clear();
         user.getRoles().add(Role.USER);
         userRepository.saveAndFlush(user);
 
-        mockMvc.perform(get("/api/places/999999/manage")
+        mockMvc.perform(get("/api/moderation/places/pending")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isForbidden());
     }
