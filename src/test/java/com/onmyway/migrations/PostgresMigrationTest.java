@@ -187,8 +187,8 @@ class PostgresMigrationTest {
                         """.formatted(secondExpiresAt, secondCreatedAt, familyId));
             }
 
-            var resultAfterV9 = flyway(schema).migrate();
-            assertEquals(1, resultAfterV9.migrationsExecuted);
+            var resultAfterV10 = flyway(schema).migrate();
+            assertEquals(2, resultAfterV10.migrationsExecuted, "V9 and V10 should run after targeting V8");
 
             assertEquals(expectedFamilyExpiresAt.getEpochSecond(), queryLong(schema, """
                     SELECT EXTRACT(EPOCH FROM family_expires_at)::BIGINT
