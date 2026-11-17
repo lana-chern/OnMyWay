@@ -55,8 +55,8 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
             where id in (
                 select id
                 from refresh_tokens
-                where expires_at <= :now
-                order by expires_at
+                where family_expires_at <= :now
+                order by family_expires_at, id
                 limit :batchSize
             )
             """, nativeQuery = true)
