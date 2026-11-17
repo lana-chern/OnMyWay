@@ -10,6 +10,8 @@ import org.springframework.stereotype.Service;
 import javax.crypto.SecretKey;
 import java.time.Instant;
 import java.util.Date;
+import java.util.Optional;
+import java.util.UUID;
 
 @Service
 public class JwtService {
@@ -29,6 +31,10 @@ public class JwtService {
     }
 
     public String generateToken(Long userId, long tokenVersion) {
+        return generateToken(userId, tokenVersion, null);
+    }
+
+    public String generateToken(Long userId, long tokenVersion, UUID sessionId) {
         if (userId == null || userId <= 0) {
             throw new IllegalArgumentException("User ID must be a positive number");
         }
@@ -37,13 +43,34 @@ public class JwtService {
         }
 
         Instant now = Instant.now();
-        return Jwts.builder()
+        var builder = Jwts.builder()
                 .subject(userId.toString())
                 .claim("tokenVersion", tokenVersion)
                 .issuedAt(Date.from(now))
-                .expiration(Date.from(now.plusMillis(expirationMs)))
-                .signWith(signingKey)
-                .compact();
+                .expiration(Date.from(now.plusMillis(expirationMs)));
+        if (sessionId != null) {
+            builder.claim("sessionId", sessionId.toString());
+        }
+        return builder.signWith(signingKey).compact();
+    }
+
+    /**
+     * Returns the session family encoded in a session-bound access token.
+     * Empty means the token was issued before session binding was introduced.
+     */
+    public Optional<UUID> extractSessionId(String token) {
+        Object claim = parseClaims(token).get("sessionId");
+        if (claim == null) {
+            return Optional.empty();
+        }
+        if (!(claim instanceof String sessionId)) {
+            throw new IllegalArgumentException("Invalid session ID");
+        }
+        try {
+            return Optional.of(UUID.fromString(sessionId));
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException("Invalid session ID", exception);
+        }
     }
 
     public Long extractUserId(String token) {
