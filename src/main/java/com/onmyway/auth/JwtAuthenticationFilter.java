@@ -1,5 +1,6 @@
 package com.onmyway.auth;
 
+import com.onmyway.data.repositories.RefreshTokenRepository;
 import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -13,15 +14,24 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.time.Instant;
+import java.util.Optional;
+import java.util.UUID;
 
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final JwtService jwtService;
     private final OnMyWayUserDetailsService userDetailsService;
+    private final RefreshTokenRepository refreshTokenRepository;
 
-    public JwtAuthenticationFilter(JwtService jwtService, OnMyWayUserDetailsService userDetailsService) {
+    public JwtAuthenticationFilter(
+            JwtService jwtService,
+            OnMyWayUserDetailsService userDetailsService,
+            RefreshTokenRepository refreshTokenRepository
+    ) {
         this.jwtService = jwtService;
         this.userDetailsService = userDetailsService;
+        this.refreshTokenRepository = refreshTokenRepository;
     }
 
     @Override
@@ -46,10 +56,20 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         Long userId;
         long tokenVersion;
+        Optional<UUID> sessionId;
         try {
             userId = jwtService.extractUserId(token);
             tokenVersion = jwtService.extractTokenVersion(token);
+            sessionId = jwtService.extractSessionId(token);
         } catch (JwtException | IllegalArgumentException exception) {
+            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid bearer token");
+            return;
+        }
+
+        // Legacy access tokens without a session claim remain valid only until their
+        // short expiration. Every newly issued token is bound to a refresh-token family.
+        if (sessionId.isPresent()
+                && !refreshTokenRepository.existsActiveTokenInFamily(sessionId.get(), Instant.now())) {
             response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid bearer token");
             return;
         }
