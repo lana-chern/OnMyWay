@@ -15,6 +15,11 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import com.onmyway.data.repositories.RefreshTokenRepository;
+
+import java.time.Instant;
+import java.util.Optional;
+import java.util.UUID;
 
 import java.io.IOException;
 import java.util.List;
@@ -29,6 +34,8 @@ class JwtAuthenticationFilterTest {
     JwtService jwtService;
     @Mock
     OnMyWayUserDetailsService userDetailsService;
+    @Mock
+    RefreshTokenRepository refreshTokenRepository;
     @Mock
     FilterChain filterChain;
     @InjectMocks
@@ -84,6 +91,40 @@ class JwtAuthenticationFilterTest {
         assertThat(SecurityContextHolder.getContext().getAuthentication().getPrincipal()).isSameAs(userDetails);
         verify(jwtService).extractUserId("jwt-token");
         verify(userDetailsService).loadUserById(1842L);
+        verify(filterChain).doFilter(request, response);
+    }
+
+    @Test
+    void rejectsSessionBoundJwtWhenItsRefreshTokenFamilyHasBeenRevoked() throws ServletException, IOException {
+        UUID familyId = UUID.randomUUID();
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("Authorization", "Bearer jwt-token");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        when(jwtService.extractUserId("jwt-token")).thenReturn(1842L);
+        when(jwtService.extractSessionId("jwt-token")).thenReturn(Optional.of(familyId));
+        when(refreshTokenRepository.existsActiveTokenInFamily(eq(familyId), any(Instant.class))).thenReturn(false);
+
+        filter.doFilter(request, response, filterChain);
+
+        assertThat(response.getStatus()).isEqualTo(401);
+        verifyNoInteractions(userDetailsService, filterChain);
+    }
+
+    @Test
+    void acceptsSessionBoundJwtWhenItsRefreshTokenFamilyIsActive() throws ServletException, IOException {
+        UUID familyId = UUID.randomUUID();
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("Authorization", "Bearer jwt-token");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        when(jwtService.extractUserId("jwt-token")).thenReturn(1842L);
+        when(jwtService.extractSessionId("jwt-token")).thenReturn(Optional.of(familyId));
+        when(refreshTokenRepository.existsActiveTokenInFamily(eq(familyId), any(Instant.class))).thenReturn(true);
+        OnMyWayUserDetails userDetails = userDetails(true);
+        when(userDetailsService.loadUserById(1842L)).thenReturn(userDetails);
+
+        filter.doFilter(request, response, filterChain);
+
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNotNull();
         verify(filterChain).doFilter(request, response);
     }
 
