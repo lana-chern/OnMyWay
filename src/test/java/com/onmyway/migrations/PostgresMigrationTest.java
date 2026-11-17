@@ -28,14 +28,19 @@ class PostgresMigrationTest {
             Flyway flyway = flyway(schema);
             var result = flyway.migrate();
 
-            assertEquals(9, result.migrationsExecuted);
+            assertEquals(10, result.migrationsExecuted);
             assertColumnExists(schema, "places", "owner_id");
             assertEquals(9L, queryLong(schema,
-                    "SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE AND version IN ('1', '2', '3', '4', '5', '6', '7', '8', '9')"));
+                    "SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE AND version IN ('1', '2', '3', '4', '5', '6', '7', '8', '9', '10')"));
             assertEquals(0L, queryLong(schema, "SELECT COUNT(*) FROM users WHERE email = '" + LEGACY_EMAIL + "'"));
             assertTrue(hasConstraint(schema, "places", "fk_places_owner"));
             assertTrue(hasIndex(schema, "idx_places_owner_id"));
             assertColumnIsNotNull(schema, "places", "owner_id");
+            assertColumnExists(schema, "places", "published_revision_id");
+            assertTrue(hasConstraint(schema, "places", "fk_places_published_revision"));
+            assertTrue(hasIndex(schema, "uk_place_revisions_one_working_per_place"));
+            assertTrue(hasIndex(schema, "uk_place_revisions_one_published_per_place"));
+            assertTrue(hasIndex(schema, "idx_place_revisions_moderation_queue"));
         });
     }
 
@@ -55,11 +60,26 @@ class PostgresMigrationTest {
                                CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
                         FROM cities WHERE name = 'Legacy city'
                         """);
+                statement.execute("""
+                        INSERT INTO place_photos (place_id, url, position, description)
+                        SELECT id, 'https://example.com/legacy.jpg', 0, 'Legacy photo'
+                        FROM places WHERE name = 'Legacy place'
+                        """);
+                statement.execute("""
+                        INSERT INTO place_contacts (place_id, type, contact_value)
+                        SELECT id, 'WEBSITE', 'https://legacy.example.com'
+                        FROM places WHERE name = 'Legacy place'
+                        """);
+                statement.execute("""
+                        INSERT INTO place_opening_hours (place_id, day_of_week, opening_time, closing_time, closed)
+                        SELECT id, 'MONDAY', TIME '09:00', TIME '18:00', FALSE
+                        FROM places WHERE name = 'Legacy place'
+                        """);
             }
 
             var result = flyway(schema).migrate();
 
-            assertEquals(8, result.migrationsExecuted, "V2 through V9 should run after baseline V1");
+            assertEquals(9, result.migrationsExecuted, "V2 through V10 should run after baseline V1");
             assertColumnExists(schema, "places", "owner_id");
             assertColumnIsNotNull(schema, "places", "owner_id");
             assertTrue(hasConstraint(schema, "places", "fk_places_owner"));
@@ -99,6 +119,31 @@ class PostgresMigrationTest {
             assertTrue(hasIndex(schema, "idx_refresh_tokens_family_expires_at"));
             assertEquals(1L, queryLong(schema,
                     "SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE AND version = '9'"));
+            assertEquals(1L, queryLong(schema,
+                    "SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE AND version = '10'"));
+            assertEquals(1L, queryLong(schema, """
+                    SELECT COUNT(*) FROM places p
+                    JOIN place_revisions r ON r.id = p.published_revision_id
+                    WHERE p.name = 'Legacy place' AND r.name = p.name AND r.status = 'PUBLISHED'
+                    """));
+            assertEquals(1L, queryLong(schema, """
+                    SELECT COUNT(*) FROM place_revision_photos rp
+                    JOIN place_revisions r ON r.id = rp.revision_id
+                    JOIN places p ON p.id = r.place_id
+                    WHERE p.name = 'Legacy place' AND rp.url = 'https://example.com/legacy.jpg'
+                    """));
+            assertEquals(1L, queryLong(schema, """
+                    SELECT COUNT(*) FROM place_revision_contacts rc
+                    JOIN place_revisions r ON r.id = rc.revision_id
+                    JOIN places p ON p.id = r.place_id
+                    WHERE p.name = 'Legacy place' AND rc.contact_value = 'https://legacy.example.com'
+                    """));
+            assertEquals(1L, queryLong(schema, """
+                    SELECT COUNT(*) FROM place_revision_opening_hours rh
+                    JOIN place_revisions r ON r.id = rh.revision_id
+                    JOIN places p ON p.id = r.place_id
+                    WHERE p.name = 'Legacy place' AND rh.day_of_week = 'MONDAY'
+                    """));
         });
     }
 
