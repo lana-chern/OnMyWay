@@ -1,6 +1,7 @@
 package com.onmyway.migrations;
 
 import org.flywaydb.core.Flyway;
+import org.flywaydb.core.api.MigrationVersion;
 import org.flywaydb.core.api.FlywayException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -207,7 +208,7 @@ class PostgresMigrationTest {
                 .baselineVersion("1")
                 .locations("classpath:db/migration");
         if (target != null) {
-            configuration.target(target);
+            configuration.target(MigrationVersion.fromVersion(target));
         }
         return configuration.load();
     }
