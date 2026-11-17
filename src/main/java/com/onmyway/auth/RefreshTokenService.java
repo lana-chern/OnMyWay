@@ -50,15 +50,16 @@ public class RefreshTokenService {
     }
 
     @Transactional
-    public String issue(User user) {
+    public RefreshGrant issue(User user) {
         Instant now = Instant.now();
         Instant familyExpiresAt = now.plus(familyAbsoluteLifetime);
         Instant tokenExpiresAt = min(now.plusMillis(expirationMs), familyExpiresAt);
         String rawToken = generateRawToken();
+        UUID familyId = UUID.randomUUID();
         refreshTokenRepository.save(new RefreshToken(
-                user, hash(rawToken), tokenExpiresAt, UUID.randomUUID(), familyExpiresAt
+                user, hash(rawToken), tokenExpiresAt, familyId, familyExpiresAt
         ));
-        return rawToken;
+        return new RefreshGrant(user, rawToken, familyId);
     }
 
     @Transactional(noRollbackFor = InvalidAuthenticationException.class)
@@ -115,7 +116,7 @@ public class RefreshTokenService {
                 storedToken.getFamilyId(),
                 storedToken.getFamilyExpiresAt()
         ));
-        return new RefreshGrant(user, replacement);
+        return new RefreshGrant(user, replacement, storedToken.getFamilyId());
     }
 
     @Transactional
@@ -170,6 +171,6 @@ public class RefreshTokenService {
         }
     }
 
-    public record RefreshGrant(User user, String refreshToken) {
+    public record RefreshGrant(User user, String refreshToken, UUID familyId) {
     }
 }
