@@ -72,6 +72,32 @@ class RefreshTokenServiceTest {
     }
 
     @Test
+    void rotationKeepsTheOriginalFamilyDeadlineAndCapsReplacementExpiration() {
+        User user = activeUser();
+        UUID familyId = UUID.randomUUID();
+        Instant familyExpiresAt = Instant.now().plusSeconds(30);
+        RefreshToken currentToken = new RefreshToken(
+                user, "stored-hash", familyExpiresAt, familyId, familyExpiresAt
+        );
+        when(refreshTokenRepository.findFamilyIdByTokenHash(anyString()))
+                .thenReturn(Optional.of(familyId));
+        when(refreshTokenRepository.findByTokenHashForUpdate(anyString()))
+                .thenReturn(Optional.of(currentToken));
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+
+        service.rotate("current-token");
+
+        org.mockito.ArgumentCaptor<RefreshToken> tokenCaptor =
+                org.mockito.ArgumentCaptor.forClass(RefreshToken.class);
+        verify(refreshTokenRepository, times(2)).save(tokenCaptor.capture());
+        RefreshToken replacement = tokenCaptor.getAllValues().get(1);
+
+        assertThat(replacement.getFamilyId()).isEqualTo(familyId);
+        assertThat(replacement.getFamilyExpiresAt()).isEqualTo(familyExpiresAt);
+        assertThat(replacement.getExpiresAt()).isEqualTo(familyExpiresAt);
+    }
+
+    @Test
     void replayingRevokedTokenRevokesAllActiveTokensInItsFamily() {
         User user = activeUser();
         UUID familyId = UUID.randomUUID();
