@@ -2,6 +2,8 @@ package com.onmyway.auth;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.UUID;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
@@ -17,6 +19,24 @@ class JwtServiceTest {
         assertThat(token).isNotBlank();
         assertThat(jwtService.extractUserId(token)).isEqualTo(1842L);
         assertThat(jwtService.isValid(token)).isTrue();
+    }
+
+    @Test
+    void embedsAndExtractsSessionFamilyId() {
+        JwtService jwtService = new JwtService(SECRET, 900_000);
+        UUID familyId = UUID.randomUUID();
+
+        String token = jwtService.generateToken(1842L, 3, familyId);
+
+        assertThat(jwtService.extractSessionId(token)).contains(familyId);
+    }
+
+    @Test
+    void returnsEmptySessionIdForLegacyAccessToken() {
+        JwtService jwtService = new JwtService(SECRET, 900_000);
+        String token = jwtService.generateToken(1842L, 3);
+
+        assertThat(jwtService.extractSessionId(token)).isEmpty();
     }
 
     @Test
