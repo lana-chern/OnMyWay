@@ -11,7 +11,7 @@ A published revision remains the public source of truth until a newer revision i
 - `Place`: identity, owner, city, created/updated timestamps, archived flag/state, reference to the currently published revision (nullable before first publication).
 - `PlaceRevision`: place, optimistic-lock version, revision status, name, description, latitude, longitude, rejection reason, created/updated timestamps.
 - `PlaceRevisionPhoto`, `PlaceRevisionContact`, `PlaceRevisionOpeningHours`: child rows owned by a revision, not by the place.
-- Revision statuses: `DRAFT`, `PENDING_MODERATION`, `REJECTED`, `PUBLISHED`, `SUPERSEDED`.
+- Revision statuses: `DRAFT`, `PENDING_MODERATION`, `REJECTED`, `PUBLISHED`, `SUPERSEDED`, `ARCHIVED`.
 - At most one working revision (`DRAFT`, `PENDING_MODERATION`, or `REJECTED`) per place. A partial unique index enforces this invariant in PostgreSQL.
 
 ## Lifecycle
