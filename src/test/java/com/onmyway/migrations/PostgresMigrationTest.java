@@ -184,7 +184,7 @@ class PostgresMigrationTest {
             // Build the real pre-V10 schema first; rejection_reason and owner_id are added by earlier migrations.
             flyway(schema, "9").migrate();
             try (Connection connection = connection(); Statement statement = connection.createStatement()) {
-                statement.execute("SET search_path TO \\"" + schema + "\\"");
+                statement.execute("SET search_path TO \"" + schema + "\"");
                 statement.execute("""
                         UPDATE places
                         SET rejection_reason = 'Please add missing details'
@@ -351,7 +351,7 @@ class PostgresMigrationTest {
             baseline = new String(input.readAllBytes(), StandardCharsets.UTF_8);
         }
         try (Connection connection = connection(); Statement statement = connection.createStatement()) {
-            statement.execute("SET search_path TO \"" + schema + "\"");
+                statement.execute("SET search_path TO \"" + schema + "\"");
             for (String sql : baseline.split(";")) {
                 String command = sql.strip();
                 if (!command.isEmpty()) {
@@ -384,7 +384,7 @@ class PostgresMigrationTest {
 
     private long queryLong(String schema, String sql) throws SQLException {
         try (Connection connection = connection(); Statement statement = connection.createStatement()) {
-            statement.execute("SET search_path TO \"" + schema + "\"");
+                statement.execute("SET search_path TO \"" + schema + "\"");
             try (ResultSet result = statement.executeQuery(sql)) {
                 assertTrue(result.next());
                 return result.getLong(1);
