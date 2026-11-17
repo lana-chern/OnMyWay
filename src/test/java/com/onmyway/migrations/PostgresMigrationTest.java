@@ -152,6 +152,76 @@ class PostgresMigrationTest {
     }
 
 
+
+    @Test
+    void backfillsEveryLegacyPlaceStatusAndOnlyPublishedPlacesGetPublishedPointer() throws SQLException, IOException {
+        withIsolatedSchema("place_statuses", schema -> {
+            createLegacySchema(schema);
+            try (Connection connection = connection(); Statement statement = connection.createStatement()) {
+                statement.execute("SET search_path TO \"" + schema + "\"");
+                statement.execute("""
+                        INSERT INTO cities (name, country_code, latitude, longitude, timezone)
+                        VALUES ('Status migration city', 'NL', 52.370000, 4.895000, 'Europe/Amsterdam')
+                        """);
+                statement.execute("""
+                        INSERT INTO places (
+                            city_id, name, description, latitude, longitude, status,
+                            rejection_reason, created_at, updated_at
+                        )
+                        SELECT c.id, p.name, 'Legacy ' || p.name, 52.370000, 4.895000, p.status,
+                               p.rejection_reason, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                        FROM cities c
+                        CROSS JOIN (VALUES
+                            ('Draft place', 'DRAFT', NULL::TEXT),
+                            ('Pending place', 'PENDING_MODERATION', NULL::TEXT),
+                            ('Published place', 'PUBLISHED', NULL::TEXT),
+                            ('Rejected place', 'REJECTED', 'Please add missing details'),
+                            ('Archived place', 'ARCHIVED', NULL::TEXT)
+                        ) AS p(name, status, rejection_reason)
+                        WHERE c.name = 'Status migration city'
+                        """);
+            }
+
+            flyway(schema).migrate();
+
+            assertEquals(5L, queryLong(schema, "SELECT COUNT(*) FROM place_revisions"));
+            assertEquals(1L, queryLong(schema, """
+                    SELECT COUNT(*) FROM place_revisions
+                    WHERE name = 'Draft place' AND status = 'DRAFT'
+                    """));
+            assertEquals(1L, queryLong(schema, """
+                    SELECT COUNT(*) FROM place_revisions
+                    WHERE name = 'Pending place' AND status = 'PENDING_MODERATION'
+                    """));
+            assertEquals(1L, queryLong(schema, """
+                    SELECT COUNT(*) FROM place_revisions
+                    WHERE name = 'Published place' AND status = 'PUBLISHED'
+                    """));
+            assertEquals(1L, queryLong(schema, """
+                    SELECT COUNT(*) FROM place_revisions
+                    WHERE name = 'Rejected place' AND status = 'REJECTED'
+                      AND rejection_reason = 'Please add missing details'
+                    """));
+            assertEquals(1L, queryLong(schema, """
+                    SELECT COUNT(*) FROM place_revisions
+                    WHERE name = 'Archived place' AND status = 'ARCHIVED'
+                    """));
+            assertEquals(1L, queryLong(schema, """
+                    SELECT COUNT(*) FROM places p
+                    JOIN place_revisions r ON r.id = p.published_revision_id
+                    WHERE p.name = 'Published place' AND r.status = 'PUBLISHED'
+                    """));
+            assertEquals(4L, queryLong(schema, """
+                    SELECT COUNT(*) FROM places WHERE published_revision_id IS NULL
+                    """));
+            assertEquals(0L, queryLong(schema, """
+                    SELECT COUNT(*) FROM places p
+                    JOIN place_revisions r ON r.id = p.published_revision_id
+                    WHERE p.status <> 'PUBLISHED'
+                    """));
+        });
+    }
+
     @Test
     void backfillsFamilyDeadlineFromEarliestTokenAndCapsLegacyExpiration() throws SQLException, IOException {
         withIsolatedSchema("family_expiration", schema -> {
