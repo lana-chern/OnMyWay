@@ -631,6 +631,9 @@ class AuthControllerTest {
         moderator.getRoles().add(Role.MODERATOR);
         userRepository.saveAndFlush(moderator);
 
+        moderator = userRepository.findById(moderator.getId()).orElseThrow();
+        assertThat(moderator.getRoles()).containsExactly(Role.MODERATOR);
+
         String token = jwtService.generateToken(moderator.getId(), moderator.getTokenVersion());
 
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
