@@ -611,9 +611,13 @@ class AuthControllerTest {
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk());
 
+        user = userRepository.findById(user.getId()).orElseThrow();
         user.getRoles().clear();
         user.getRoles().add(Role.USER);
         userRepository.saveAndFlush(user);
+
+        assertThat(userRepository.findById(user.getId()).orElseThrow().getRoles())
+                .containsExactly(Role.USER);
 
         mockMvc.perform(get("/api/moderation/places/pending")
                         .header("Authorization", "Bearer " + token))
