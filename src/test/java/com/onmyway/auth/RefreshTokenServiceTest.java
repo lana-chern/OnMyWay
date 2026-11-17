@@ -24,7 +24,7 @@ class RefreshTokenServiceTest {
     private final RefreshTokenRepository refreshTokenRepository = mock(RefreshTokenRepository.class);
     private final UserRepository userRepository = mock(UserRepository.class);
     private final RefreshTokenService service = new RefreshTokenService(
-            refreshTokenRepository, userRepository, 60_000L
+            refreshTokenRepository, userRepository, 60_000L, 7_776_000_000L
     );
 
     @Test
