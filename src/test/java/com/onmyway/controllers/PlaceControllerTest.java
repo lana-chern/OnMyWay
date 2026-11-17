@@ -163,7 +163,7 @@ class PlaceControllerTest {
         mockMvc.perform(put("/api/places/{id}", place.getId())
                         .with(user(principal(owner)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\\"version\\":0,\\"name\\":\\"Updated while pending\\",\\"description\\":\\"Latest organizer details\\",\\"latitude\\":52.370000,\\"longitude\\":4.900000}"))
+                        .content("{\"version\":0,\"name\":\"Updated while pending\",\"description\":\"Latest organizer details\",\"latitude\":52.370000,\"longitude\":4.900000}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("Updated while pending"))
                 .andExpect(jsonPath("$.description").value("Latest organizer details"))
