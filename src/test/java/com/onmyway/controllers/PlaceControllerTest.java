@@ -153,6 +153,30 @@ class PlaceControllerTest {
                 .containsExactly("https://example.com/first.jpg");
     }
 
+
+    @Test
+    void organizerCanUpdatePlaceWhilePendingModerationAndVersionIsIncremented() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("organizer-pending-update@example.com", Role.ORGANIZER));
+        City city = cityRepository.saveAndFlush(city("Amsterdam Pending Update"));
+        Place place = placeRepository.saveAndFlush(place(city, owner, "Submitted name", PlaceStatus.PENDING_MODERATION));
+
+        mockMvc.perform(put("/api/places/{id}", place.getId())
+                        .with(user(principal(owner)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\\"version\\":0,\\"name\\":\\"Updated while pending\\",\\"description\\":\\"Latest organizer details\\",\\"latitude\\":52.370000,\\"longitude\\":4.900000}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Updated while pending"))
+                .andExpect(jsonPath("$.description").value("Latest organizer details"))
+                .andExpect(jsonPath("$.status").value("PENDING_MODERATION"))
+                .andExpect(jsonPath("$.version").value(1));
+
+        Place persisted = placeRepository.findById(place.getId()).orElseThrow();
+        assertThat(persisted.getStatus()).isEqualTo(PlaceStatus.PENDING_MODERATION);
+        assertThat(persisted.getName()).isEqualTo("Updated while pending");
+        assertThat(persisted.getDescription()).isEqualTo("Latest organizer details");
+        assertThat(persisted.getVersion()).isEqualTo(1L);
+    }
+
     @Test
     void rejectsPlaceUpdateWithoutVersion() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("organizer-missing-version@example.com", Role.ORGANIZER));
