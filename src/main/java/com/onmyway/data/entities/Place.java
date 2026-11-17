@@ -51,6 +51,10 @@ public class Place {
     @Column(name = "rejection_reason", columnDefinition = "TEXT")
     private String rejectionReason;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "published_revision_id")
+    private PlaceRevision publishedRevision;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
