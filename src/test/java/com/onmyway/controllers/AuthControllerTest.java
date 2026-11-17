@@ -442,6 +442,11 @@ class AuthControllerTest {
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         String refreshToken = com.jayway.jsonpath.JsonPath.read(loginResponse, "$.refreshToken");
+        String accessToken = com.jayway.jsonpath.JsonPath.read(loginResponse, "$.accessToken");
+
+        mockMvc.perform(get("/api/auth/me")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isOk());
 
         mockMvc.perform(post("/api/auth/logout")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -456,6 +461,47 @@ class AuthControllerTest {
                                 {"refreshToken":"%s"}
                                 """.formatted(refreshToken)))
                 .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(get("/api/auth/me")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void logoutInvalidatesOnlyTheAccessTokenFromItsOwnSession() throws Exception {
+        registerUser("logout-isolation@example.com", "password123", "Logout Isolation");
+        String firstLogin = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"logout-isolation@example.com","password":"password123"}
+                                """))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String firstRefreshToken = com.jayway.jsonpath.JsonPath.read(firstLogin, "$.refreshToken");
+        String firstAccessToken = com.jayway.jsonpath.JsonPath.read(firstLogin, "$.accessToken");
+
+        String secondLogin = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"logout-isolation@example.com","password":"password123"}
+                                """))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String secondAccessToken = com.jayway.jsonpath.JsonPath.read(secondLogin, "$.accessToken");
+
+        mockMvc.perform(post("/api/auth/logout")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"refreshToken":"%s"}
+                                """.formatted(firstRefreshToken)))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/api/auth/me")
+                        .header("Authorization", "Bearer " + firstAccessToken))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/auth/me")
+                        .header("Authorization", "Bearer " + secondAccessToken))
+                .andExpect(status().isOk());
     }
 
     @Test
