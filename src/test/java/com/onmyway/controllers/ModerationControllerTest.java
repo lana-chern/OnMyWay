@@ -453,6 +453,126 @@ class ModerationControllerTest {
         }
     }
 
+
+    @Test
+    void concurrentOrganizerUpdateAndPublishCannotOverwriteEachOther() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("moderation-update-publish-owner@example.com", Role.ORGANIZER));
+        User moderator = userRepository.saveAndFlush(testUser("moderation-update-publish-mod@example.com", Role.MODERATOR));
+        Place place = placeRepository.saveAndFlush(place(owner, "Original pending name", PlaceStatus.PENDING_MODERATION));
+
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<Integer> updateStatus = executor.submit(() -> {
+                ready.countDown();
+                if (!start.await(5, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("Timed out waiting to start organizer update");
+                }
+                return mockMvc.perform(put("/api/places/{id}", place.getId())
+                                .with(user(principal(owner)))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\\"version\\":0,\\"name\\":\\"Updated by organizer\\",\\"latitude\\":52.360000,\\"longitude\\":4.885200}"))
+                        .andReturn().getResponse().getStatus();
+            });
+            Future<Integer> publishStatus = executor.submit(() -> {
+                ready.countDown();
+                if (!start.await(5, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("Timed out waiting to start publish request");
+                }
+                return mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
+                                .with(user(principal(moderator)))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\\"version\\":0}"))
+                        .andReturn().getResponse().getStatus();
+            });
+
+            assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            int updateResponse = updateStatus.get(15, TimeUnit.SECONDS);
+            int publishResponse = publishStatus.get(15, TimeUnit.SECONDS);
+            assertThat(java.util.List.of(updateResponse, publishResponse))
+                    .containsExactlyInAnyOrder(200, 409);
+
+            Place persisted = placeRepository.findById(place.getId()).orElseThrow();
+            if (updateResponse == 200) {
+                assertThat(publishResponse).isEqualTo(409);
+                assertThat(persisted.getName()).isEqualTo("Updated by organizer");
+                assertThat(persisted.getStatus()).isEqualTo(PlaceStatus.PENDING_MODERATION);
+                assertThat(persisted.getVersion()).isEqualTo(1L);
+            } else {
+                assertThat(publishResponse).isEqualTo(200);
+                assertThat(persisted.getName()).isEqualTo("Original pending name");
+                assertThat(persisted.getStatus()).isEqualTo(PlaceStatus.PUBLISHED);
+                assertThat(persisted.getVersion()).isEqualTo(1L);
+            }
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+
+    @Test
+    void concurrentOrganizerUpdateAndRejectCannotOverwriteEachOther() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("moderation-update-reject-owner@example.com", Role.ORGANIZER));
+        User moderator = userRepository.saveAndFlush(testUser("moderation-update-reject-mod@example.com", Role.MODERATOR));
+        Place place = placeRepository.saveAndFlush(place(owner, "Original pending name", PlaceStatus.PENDING_MODERATION));
+
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<Integer> updateStatus = executor.submit(() -> {
+                ready.countDown();
+                if (!start.await(5, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("Timed out waiting to start organizer update");
+                }
+                return mockMvc.perform(put("/api/places/{id}", place.getId())
+                                .with(user(principal(owner)))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\\"version\\":0,\\"name\\":\\"Updated by organizer\\",\\"latitude\\":52.360000,\\"longitude\\":4.885200}"))
+                        .andReturn().getResponse().getStatus();
+            });
+            Future<Integer> rejectStatus = executor.submit(() -> {
+                ready.countDown();
+                if (!start.await(5, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("Timed out waiting to start reject request");
+                }
+                return mockMvc.perform(post("/api/moderation/places/{id}/reject", place.getId())
+                                .with(user(principal(moderator)))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\\"version\\":0,\\"reason\\":\\"Insufficient details\\"}"))
+                        .andReturn().getResponse().getStatus();
+            });
+
+            assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            int updateResponse = updateStatus.get(15, TimeUnit.SECONDS);
+            int rejectResponse = rejectStatus.get(15, TimeUnit.SECONDS);
+            assertThat(java.util.List.of(updateResponse, rejectResponse))
+                    .containsExactlyInAnyOrder(200, 409);
+
+            Place persisted = placeRepository.findById(place.getId()).orElseThrow();
+            if (updateResponse == 200) {
+                assertThat(rejectResponse).isEqualTo(409);
+                assertThat(persisted.getName()).isEqualTo("Updated by organizer");
+                assertThat(persisted.getStatus()).isEqualTo(PlaceStatus.PENDING_MODERATION);
+                assertThat(persisted.getRejectionReason()).isNull();
+                assertThat(persisted.getVersion()).isEqualTo(1L);
+            } else {
+                assertThat(rejectResponse).isEqualTo(200);
+                assertThat(persisted.getName()).isEqualTo("Original pending name");
+                assertThat(persisted.getStatus()).isEqualTo(PlaceStatus.REJECTED);
+                assertThat(persisted.getRejectionReason()).isEqualTo("Insufficient details");
+                assertThat(persisted.getVersion()).isEqualTo(1L);
+            }
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
     @Test
     void publishRequiresNonNullVersion() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("moderation-missing-version-owner@example.com", Role.ORGANIZER));
