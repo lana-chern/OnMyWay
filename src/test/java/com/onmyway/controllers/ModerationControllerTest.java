@@ -48,7 +48,7 @@ class ModerationControllerTest {
     @Test
     void ownerCanSubmitDraftForModeration() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("moderation-submit-owner@example.com", Role.ORGANIZER));
-        Place place = placeRepository.saveAndFlush(place(owner, "Draft", PlaceStatus.DRAFT));
+        Place place = place(owner, "Draft", PlaceStatus.DRAFT));
 
         mockMvc.perform(post("/api/places/{id}/submit-for-moderation", place.getId())
                         .with(user(principal(owner))))
@@ -64,7 +64,7 @@ class ModerationControllerTest {
     void anotherOrganizerCannotSubmitPlaceForModeration() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("moderation-submit-owner-2@example.com", Role.ORGANIZER));
         User anotherOrganizer = userRepository.saveAndFlush(testUser("moderation-submit-other@example.com", Role.ORGANIZER));
-        Place place = placeRepository.saveAndFlush(place(owner, "Owner draft", PlaceStatus.DRAFT));
+        Place place = place(owner, "Owner draft", PlaceStatus.DRAFT));
 
         mockMvc.perform(post("/api/places/{id}/submit-for-moderation", place.getId())
                         .with(user(principal(anotherOrganizer))))
@@ -77,9 +77,9 @@ class ModerationControllerTest {
     void moderatorListsOnlyPlacesPendingModeration() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("moderation-list-owner@example.com", Role.ORGANIZER));
         User moderator = userRepository.saveAndFlush(testUser("moderation-list-moderator@example.com", Role.MODERATOR));
-        Place pending = placeRepository.saveAndFlush(place(owner, "Pending", PlaceStatus.PENDING_MODERATION));
-        Place draft = placeRepository.saveAndFlush(place(owner, "Draft", PlaceStatus.DRAFT));
-        Place published = placeRepository.saveAndFlush(place(owner, "Published", PlaceStatus.PUBLISHED));
+        Place pending = place(owner, "Pending", PlaceStatus.PENDING_MODERATION));
+        Place draft = place(owner, "Draft", PlaceStatus.DRAFT));
+        Place published = place(owner, "Published", PlaceStatus.PUBLISHED));
 
         mockMvc.perform(get("/api/moderation/places/pending").with(user(principal(moderator))))
                 .andExpect(status().isOk())
@@ -94,7 +94,7 @@ class ModerationControllerTest {
     void moderationQueueReturnsLatestPlaceVersionAndThatVersionCanBePublished() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("moderation-queue-version-owner@example.com", Role.ORGANIZER));
         User moderator = userRepository.saveAndFlush(testUser("moderation-queue-version-mod@example.com", Role.MODERATOR));
-        Place place = placeRepository.saveAndFlush(place(owner, "Original pending place", PlaceStatus.PENDING_MODERATION));
+        Place place = place(owner, "Original pending place", PlaceStatus.PENDING_MODERATION));
 
         PlaceRevision workingRevision = revisionRepository
                 .findByPlaceIdAndStatus(place.getId(), PlaceRevisionStatus.PENDING_MODERATION).orElseThrow();
@@ -130,7 +130,7 @@ class ModerationControllerTest {
     void administratorCanAccessModerationQueue() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("moderation-admin-queue-owner@example.com", Role.ORGANIZER));
         User admin = userRepository.saveAndFlush(testUser("moderation-admin-queue@example.com", Role.ADMIN));
-        Place pending = placeRepository.saveAndFlush(place(owner, "Admin queue pending", PlaceStatus.PENDING_MODERATION));
+        Place pending = place(owner, "Admin queue pending", PlaceStatus.PENDING_MODERATION));
 
         mockMvc.perform(get("/api/moderation/places/pending").with(user(principal(admin))))
                 .andExpect(status().isOk())
@@ -141,7 +141,7 @@ class ModerationControllerTest {
     void moderatorCanPublishPendingPlace() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("moderation-publish-owner@example.com", Role.ORGANIZER));
         User moderator = userRepository.saveAndFlush(testUser("moderation-publish-mod@example.com", Role.MODERATOR));
-        Place place = placeRepository.saveAndFlush(place(owner, "Pending place", PlaceStatus.PENDING_MODERATION));
+        Place place = place(owner, "Pending place", PlaceStatus.PENDING_MODERATION));
 
         mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
                         .with(user(principal(moderator)))
@@ -158,7 +158,7 @@ class ModerationControllerTest {
     void administratorCanPublishPendingPlace() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("moderation-admin-publish-owner@example.com", Role.ORGANIZER));
         User admin = userRepository.saveAndFlush(testUser("moderation-admin-publish@example.com", Role.ADMIN));
-        Place place = placeRepository.saveAndFlush(place(owner, "Admin pending place", PlaceStatus.PENDING_MODERATION));
+        Place place = place(owner, "Admin pending place", PlaceStatus.PENDING_MODERATION));
 
         mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
                         .with(user(principal(admin)))
@@ -174,7 +174,7 @@ class ModerationControllerTest {
     void moderatorCanRejectPendingPlaceWithReasonAndOwnerCanReadItAndResubmit() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("moderation-reject-owner@example.com", Role.ORGANIZER));
         User moderator = userRepository.saveAndFlush(testUser("moderation-reject-mod@example.com", Role.MODERATOR));
-        Place place = placeRepository.saveAndFlush(place(owner, "Pending place", PlaceStatus.PENDING_MODERATION));
+        Place place = place(owner, "Pending place", PlaceStatus.PENDING_MODERATION));
 
         mockMvc.perform(post("/api/moderation/places/{id}/reject", place.getId())
                         .with(user(principal(moderator)))
@@ -202,7 +202,7 @@ class ModerationControllerTest {
     void rejectionReasonIsRequired() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("moderation-empty-reason-owner@example.com", Role.ORGANIZER));
         User moderator = userRepository.saveAndFlush(testUser("moderation-empty-reason-mod@example.com", Role.MODERATOR));
-        Place place = placeRepository.saveAndFlush(place(owner, "Pending place", PlaceStatus.PENDING_MODERATION));
+        Place place = place(owner, "Pending place", PlaceStatus.PENDING_MODERATION));
 
         mockMvc.perform(post("/api/moderation/places/{id}/reject", place.getId())
                         .with(user(principal(moderator)))
@@ -218,7 +218,7 @@ class ModerationControllerTest {
     void missingOrNullRejectionReasonIsRejected() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("moderation-missing-reason-owner@example.com", Role.ORGANIZER));
         User moderator = userRepository.saveAndFlush(testUser("moderation-missing-reason-mod@example.com", Role.MODERATOR));
-        Place place = placeRepository.saveAndFlush(place(owner, "Pending place", PlaceStatus.PENDING_MODERATION));
+        Place place = place(owner, "Pending place", PlaceStatus.PENDING_MODERATION));
 
         mockMvc.perform(post("/api/moderation/places/{id}/reject", place.getId())
                         .with(user(principal(moderator)))
@@ -241,7 +241,7 @@ class ModerationControllerTest {
     void rejectionReasonMustNotExceedOneThousandCharactersAfterTrimming() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("moderation-long-reason-owner@example.com", Role.ORGANIZER));
         User moderator = userRepository.saveAndFlush(testUser("moderation-long-reason-mod@example.com", Role.MODERATOR));
-        Place place = placeRepository.saveAndFlush(place(owner, "Pending place", PlaceStatus.PENDING_MODERATION));
+        Place place = place(owner, "Pending place", PlaceStatus.PENDING_MODERATION));
         String tooLongReason = "x".repeat(1001);
 
         mockMvc.perform(post("/api/moderation/places/{id}/reject", place.getId())
@@ -259,7 +259,7 @@ class ModerationControllerTest {
     void strippedUnicodeWhitespaceAroundMaximumLengthReasonIsAccepted() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("moderation-boundary-reason-owner@example.com", Role.ORGANIZER));
         User moderator = userRepository.saveAndFlush(testUser("moderation-boundary-reason-mod@example.com", Role.MODERATOR));
-        Place place = placeRepository.saveAndFlush(place(owner, "Pending place", PlaceStatus.PENDING_MODERATION));
+        Place place = place(owner, "Pending place", PlaceStatus.PENDING_MODERATION));
         String maxLengthReason = "x".repeat(1000);
         String reasonWithSurroundingWhitespace = "\u2003" + maxLengthReason + "\u2003";
 
@@ -279,7 +279,7 @@ class ModerationControllerTest {
     void anotherOrganizerCannotReadRejectedPlaceManagementDetails() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("moderation-manage-owner@example.com", Role.ORGANIZER));
         User anotherOrganizer = userRepository.saveAndFlush(testUser("moderation-manage-other@example.com", Role.ORGANIZER));
-        Place place = placeRepository.saveAndFlush(place(owner, "Rejected place", PlaceStatus.REJECTED));
+        Place place = place(owner, "Rejected place", PlaceStatus.REJECTED));
         place.setRejectionReason("Add accurate opening hours");
         placeRepository.saveAndFlush(place);
 
@@ -291,7 +291,7 @@ class ModerationControllerTest {
     void moderatorPublishingPlaceClearsOldRejectionReason() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("moderation-publish-reason-owner@example.com", Role.ORGANIZER));
         User moderator = userRepository.saveAndFlush(testUser("moderation-publish-reason-mod@example.com", Role.MODERATOR));
-        Place place = placeRepository.saveAndFlush(place(owner, "Pending place", PlaceStatus.PENDING_MODERATION));
+        Place place = place(owner, "Pending place", PlaceStatus.PENDING_MODERATION));
         place.setRejectionReason("Old rejection reason");
         placeRepository.saveAndFlush(place);
 
@@ -318,7 +318,7 @@ class ModerationControllerTest {
     void moderatorCanEditAnotherOrganizersPlaceButCannotArchiveIt() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("moderation-edit-owner@example.com", Role.ORGANIZER));
         User moderator = userRepository.saveAndFlush(testUser("moderation-edit-mod@example.com", Role.MODERATOR));
-        Place place = placeRepository.saveAndFlush(place(owner, "Original", PlaceStatus.DRAFT));
+        Place place = place(owner, "Original", PlaceStatus.DRAFT));
 
         mockMvc.perform(put("/api/places/{id}", place.getId())
                         .with(user(principal(moderator)))
@@ -337,7 +337,7 @@ class ModerationControllerTest {
     void cannotPublishPlaceThatIsNotPendingModeration() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("moderation-state-owner@example.com", Role.ORGANIZER));
         User moderator = userRepository.saveAndFlush(testUser("moderation-state-mod@example.com", Role.MODERATOR));
-        Place place = placeRepository.saveAndFlush(place(owner, "Draft place", PlaceStatus.DRAFT));
+        Place place = place(owner, "Draft place", PlaceStatus.DRAFT));
 
         mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
                         .with(user(principal(moderator)))
@@ -352,7 +352,7 @@ class ModerationControllerTest {
     void cannotPublishAlreadyPublishedPlaceAgain() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("moderation-republish-owner@example.com", Role.ORGANIZER));
         User moderator = userRepository.saveAndFlush(testUser("moderation-republish-mod@example.com", Role.MODERATOR));
-        Place place = placeRepository.saveAndFlush(place(owner, "Already published", PlaceStatus.PUBLISHED));
+        Place place = place(owner, "Already published", PlaceStatus.PUBLISHED));
 
         mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
                         .with(user(principal(moderator)))
@@ -366,7 +366,7 @@ class ModerationControllerTest {
     @Test
     void stalePlaceUpdateIsRejectedByOptimisticLocking() {
         User owner = userRepository.saveAndFlush(testUser("moderation-version-owner@example.com", Role.ORGANIZER));
-        Place place = placeRepository.saveAndFlush(place(owner, "Original", PlaceStatus.DRAFT));
+        Place place = place(owner, "Original", PlaceStatus.DRAFT));
 
         Place staleCopy = placeRepository.findById(place.getId()).orElseThrow();
         Place currentCopy = placeRepository.findById(place.getId()).orElseThrow();
@@ -385,7 +385,7 @@ class ModerationControllerTest {
     @Test
     void competingModerationDecisionsCannotOverwriteEachOther() {
         User owner = userRepository.saveAndFlush(testUser("moderation-race-owner@example.com", Role.ORGANIZER));
-        Place place = placeRepository.saveAndFlush(place(owner, "Competing moderation", PlaceStatus.PENDING_MODERATION));
+        Place place = place(owner, "Competing moderation", PlaceStatus.PENDING_MODERATION));
 
         Place publishRequest = placeRepository.findById(place.getId()).orElseThrow();
         Place rejectRequest = placeRepository.findById(place.getId()).orElseThrow();
@@ -410,7 +410,7 @@ class ModerationControllerTest {
         User owner = userRepository.saveAndFlush(testUser("moderation-http-race-owner@example.com", Role.ORGANIZER));
         User moderator = userRepository.saveAndFlush(testUser("moderation-http-race-mod@example.com", Role.MODERATOR));
         User secondModerator = userRepository.saveAndFlush(testUser("moderation-http-race-mod-2@example.com", Role.MODERATOR));
-        Place place = placeRepository.saveAndFlush(place(owner, "Concurrent moderation", PlaceStatus.PENDING_MODERATION));
+        Place place = place(owner, "Concurrent moderation", PlaceStatus.PENDING_MODERATION));
 
         CountDownLatch ready = new CountDownLatch(2);
         CountDownLatch start = new CountDownLatch(1);
@@ -464,7 +464,7 @@ class ModerationControllerTest {
     void concurrentOrganizerUpdateAndPublishCannotOverwriteEachOther() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("moderation-update-publish-owner@example.com", Role.ORGANIZER));
         User moderator = userRepository.saveAndFlush(testUser("moderation-update-publish-mod@example.com", Role.MODERATOR));
-        Place place = placeRepository.saveAndFlush(place(owner, "Original pending name", PlaceStatus.PENDING_MODERATION));
+        Place place = place(owner, "Original pending name", PlaceStatus.PENDING_MODERATION));
 
         CountDownLatch ready = new CountDownLatch(2);
         CountDownLatch start = new CountDownLatch(1);
@@ -523,7 +523,7 @@ class ModerationControllerTest {
     void concurrentOrganizerUpdateAndRejectCannotOverwriteEachOther() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("moderation-update-reject-owner@example.com", Role.ORGANIZER));
         User moderator = userRepository.saveAndFlush(testUser("moderation-update-reject-mod@example.com", Role.MODERATOR));
-        Place place = placeRepository.saveAndFlush(place(owner, "Original pending name", PlaceStatus.PENDING_MODERATION));
+        Place place = place(owner, "Original pending name", PlaceStatus.PENDING_MODERATION));
 
         CountDownLatch ready = new CountDownLatch(2);
         CountDownLatch start = new CountDownLatch(1);
@@ -583,7 +583,7 @@ class ModerationControllerTest {
     void publishRequiresNonNullVersion() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("moderation-missing-version-owner@example.com", Role.ORGANIZER));
         User moderator = userRepository.saveAndFlush(testUser("moderation-missing-version-mod@example.com", Role.MODERATOR));
-        Place place = placeRepository.saveAndFlush(place(owner, "Pending place", PlaceStatus.PENDING_MODERATION));
+        Place place = place(owner, "Pending place", PlaceStatus.PENDING_MODERATION));
 
         mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
                         .with(user(principal(moderator)))
@@ -605,7 +605,7 @@ class ModerationControllerTest {
     void staleVersionCannotRejectPlaceAfterOrganizerEdit() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("moderation-stale-reject-owner@example.com", Role.ORGANIZER));
         User moderator = userRepository.saveAndFlush(testUser("moderation-stale-reject-mod@example.com", Role.MODERATOR));
-        Place place = placeRepository.saveAndFlush(place(owner, "Pending place", PlaceStatus.PENDING_MODERATION));
+        Place place = place(owner, "Pending place", PlaceStatus.PENDING_MODERATION));
         PlaceRevision workingRevision = revisionRepository
                 .findByPlaceIdAndStatus(place.getId(), PlaceRevisionStatus.PENDING_MODERATION).orElseThrow();
         long reviewedVersion = workingRevision.getVersion();
@@ -630,7 +630,7 @@ class ModerationControllerTest {
     void staleVersionCannotPublishPlaceAfterOrganizerEdit() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("moderation-stale-owner@example.com", Role.ORGANIZER));
         User moderator = userRepository.saveAndFlush(testUser("moderation-stale-mod@example.com", Role.MODERATOR));
-        Place place = placeRepository.saveAndFlush(place(owner, "Pending place", PlaceStatus.PENDING_MODERATION));
+        Place place = place(owner, "Pending place", PlaceStatus.PENDING_MODERATION));
         PlaceRevision workingRevision = revisionRepository
                 .findByPlaceIdAndStatus(place.getId(), PlaceRevisionStatus.PENDING_MODERATION).orElseThrow();
         long reviewedVersion = workingRevision.getVersion();
@@ -688,7 +688,10 @@ class ModerationControllerTest {
         revision.setLongitude(place.getLongitude());
         revision.setStatus(PlaceRevisionStatus.valueOf(status.name()));
         revisionRepository.saveAndFlush(revision);
-        if (status == PlaceStatus.PUBLISHED) place.setPublishedRevision(revision);
+        if (status == PlaceStatus.PUBLISHED) {
+            place.setPublishedRevision(revision);
+            placeRepository.saveAndFlush(place);
+        }
         return place;
     }
 
