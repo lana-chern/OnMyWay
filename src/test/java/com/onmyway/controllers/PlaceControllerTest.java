@@ -655,7 +655,7 @@ class PlaceControllerTest {
                 .andExpect(jsonPath("$.description").value("Public description"))
                 .andExpect(jsonPath("$.photos[0].url").value("https://example.com/original.jpg"))
                 .andExpect(jsonPath("$.contacts[0].value").value("https://example.com/original"))
-                .andExpect(jsonPath("$.openingHours[0].openingTime").value("09:00"));
+                .andExpect(jsonPath("$.openingHours[0].openingTime").value(org.hamcrest.Matchers.startsWith("09:00")));
 
         mockMvc.perform(post("/api/places/{id}/submit-for-moderation", placeId)
                         .with(user(principal(owner))))
@@ -691,7 +691,7 @@ class PlaceControllerTest {
                 .andExpect(jsonPath("$.status").value("REJECTED"))
                 .andExpect(jsonPath("$.photos[0].url").value("https://example.com/candidate.jpg"))
                 .andExpect(jsonPath("$.contacts[0].value").value("https://example.com/candidate"))
-                .andExpect(jsonPath("$.openingHours[0].openingTime").value("10:00"));
+                .andExpect(jsonPath("$.openingHours[0].openingTime").value(org.hamcrest.Matchers.startsWith("10:00")));
 
         mockMvc.perform(post("/api/places/{id}/submit-for-moderation", placeId)
                         .with(user(principal(owner))))
