@@ -599,6 +599,102 @@ class PlaceControllerTest {
                 .andExpect(status().isBadRequest());
     }
 
+    @Test
+    void publishedPlaceChangesRemainPrivateUntilTheNewRevisionIsApproved() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("revision-lifecycle-owner@example.com", Role.ORGANIZER));
+        User moderator = userRepository.saveAndFlush(testUser("revision-lifecycle-moderator@example.com", Role.MODERATOR));
+        City city = cityRepository.saveAndFlush(city("Amsterdam Revision Lifecycle"));
+
+        var created = mockMvc.perform(post("/api/places")
+                        .with(user(principal(owner)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"cityId\":" + city.getId() + ",\"name\":\"Original\",\"description\":\"Public description\",\"latitude\":52.360000,\"longitude\":4.885200}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.version").value(0))
+                .andReturn();
+        Long placeId = new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree(created.getResponse().getContentAsString()).get("id").asLong();
+
+        mockMvc.perform(post("/api/places/{id}/submit-for-moderation", placeId)
+                        .with(user(principal(owner))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PENDING_MODERATION"))
+                .andExpect(jsonPath("$.version").value(1));
+
+        mockMvc.perform(post("/api/moderation/places/{id}/publish", placeId)
+                        .with(user(principal(moderator)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"version\":1}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PUBLISHED"))
+                .andExpect(jsonPath("$.version").value(2));
+
+        mockMvc.perform(get("/api/places/{id}", placeId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Original"));
+
+        mockMvc.perform(put("/api/places/{id}", placeId)
+                        .with(user(principal(owner)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"version\":2,\"name\":\"Candidate\",\"description\":\"Candidate description\",\"latitude\":52.370000,\"longitude\":4.900000}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.version").value(3))
+                .andExpect(jsonPath("$.name").value("Candidate"));
+
+        mockMvc.perform(get("/api/places/{id}", placeId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Original"))
+                .andExpect(jsonPath("$.description").value("Public description"));
+
+        mockMvc.perform(post("/api/places/{id}/submit-for-moderation", placeId)
+                        .with(user(principal(owner))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.version").value(4));
+
+        mockMvc.perform(get("/api/moderation/places/pending").with(user(principal(moderator))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].name").value("Candidate"))
+                .andExpect(jsonPath("$[0].version").value(4));
+
+        mockMvc.perform(post("/api/moderation/places/{id}/reject", placeId)
+                        .with(user(principal(moderator)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"version\":4,\"reason\":\"Needs more details\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("REJECTED"));
+
+        mockMvc.perform(get("/api/places/{id}", placeId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Original"));
+
+        mockMvc.perform(get("/api/places/{id}/manage", placeId).with(user(principal(owner))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Candidate"))
+                .andExpect(jsonPath("$.status").value("REJECTED"));
+
+        mockMvc.perform(post("/api/places/{id}/submit-for-moderation", placeId)
+                        .with(user(principal(owner))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.version").value(6));
+
+        mockMvc.perform(post("/api/moderation/places/{id}/publish", placeId)
+                        .with(user(principal(moderator)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"version\":6}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PUBLISHED"));
+
+        mockMvc.perform(get("/api/places/{id}", placeId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Candidate"))
+                .andExpect(jsonPath("$.description").value("Candidate description"));
+
+        assertThat(revisionRepository.findByPlaceIdAndStatus(placeId, PlaceRevisionStatus.SUPERSEDED))
+                .isPresent();
+        assertThat(revisionRepository.findByPlaceIdAndStatus(placeId, PlaceRevisionStatus.PUBLISHED))
+                .isPresent();
+    }
+
     private OnMyWayUserDetails principal(User user) {
         return new OnMyWayUserDetails(
                 user.getId(),
