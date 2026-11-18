@@ -45,7 +45,7 @@ class OpenApiControllerTest {
                 .andExpect(jsonPath("$.paths['/api/places'].get.parameters[1].description").value("Optional case-insensitive search text matched against place names."))
                 .andExpect(jsonPath("$.paths['/api/places/{id}'].put.parameters[0].description").value("Unique ID of the place to update."))
                 .andExpect(jsonPath("$.components.schemas.CreatePlaceRequest.properties.cityId.description").value("ID of the city where the place is located."))
-                .andExpect(jsonPath("$.components.schemas.UpdatePlaceRequest.properties.version.description").value("Current version of the place. Must match the version last read by the client."))
+                .andExpect(jsonPath("$.components.schemas.UpdatePlaceRequest.properties.version.description").value("Current revision version. Must match the version last read by the client."))
                 .andExpect(jsonPath("$.components.schemas.RejectPlaceRequest.properties.reason.description").value("Explanation of why the submission was rejected."));
     }
 
