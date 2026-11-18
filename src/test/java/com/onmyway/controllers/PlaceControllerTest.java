@@ -3,11 +3,14 @@ package com.onmyway.controllers;
 import com.onmyway.auth.OnMyWayUserDetails;
 import com.onmyway.data.entities.City;
 import com.onmyway.data.entities.Place;
+import com.onmyway.data.entities.PlaceRevision;
+import com.onmyway.data.entities.PlaceRevisionStatus;
 import com.onmyway.data.entities.PlaceStatus;
 import com.onmyway.data.entities.Role;
 import com.onmyway.data.entities.User;
 import com.onmyway.data.repositories.CityRepository;
 import com.onmyway.data.repositories.PlaceRepository;
+import com.onmyway.data.repositories.PlaceRevisionRepository;
 import com.onmyway.data.repositories.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,6 +37,7 @@ class PlaceControllerTest {
     @Autowired MockMvc mockMvc;
     @Autowired CityRepository cityRepository;
     @Autowired PlaceRepository placeRepository;
+    @Autowired PlaceRevisionRepository revisionRepository;
     @Autowired UserRepository userRepository;
     @Autowired JdbcTemplate jdbcTemplate;
 
@@ -93,7 +97,7 @@ class PlaceControllerTest {
     void updatesPlaceForOwner() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("organizer-update@example.com", Role.ORGANIZER));
         City city = cityRepository.saveAndFlush(city("Amsterdam Update"));
-        Place place = placeRepository.saveAndFlush(place(city, owner, "Old name", PlaceStatus.DRAFT));
+        Place place = place(city, owner, "Old name", PlaceStatus.DRAFT);
 
         mockMvc.perform(put("/api/places/{id}", place.getId())
                         .with(user(principal(owner)))
@@ -110,7 +114,7 @@ class PlaceControllerTest {
     void rejectsPlaceUpdateWithStaleVersionAndPreservesCurrentData() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("organizer-stale-version@example.com", Role.ORGANIZER));
         City city = cityRepository.saveAndFlush(city("Amsterdam Stale Version"));
-        Place place = placeRepository.saveAndFlush(place(city, owner, "Current name", PlaceStatus.DRAFT));
+        Place place = place(city, owner, "Current name", PlaceStatus.DRAFT);
 
         mockMvc.perform(put("/api/places/{id}", place.getId())
                         .with(user(principal(owner)))
@@ -128,7 +132,7 @@ class PlaceControllerTest {
     void collectionOnlyUpdateIncrementsVersionAndRejectsStaleCollectionUpdate() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("organizer-collection-version@example.com", Role.ORGANIZER));
         City city = cityRepository.saveAndFlush(city("Amsterdam Collection Version"));
-        Place place = placeRepository.saveAndFlush(place(city, owner, "Unchanged name", PlaceStatus.DRAFT));
+        Place place = place(city, owner, "Unchanged name", PlaceStatus.DRAFT);
 
         mockMvc.perform(put("/api/places/{id}", place.getId())
                         .with(user(principal(owner)))
@@ -146,10 +150,12 @@ class PlaceControllerTest {
                 .andExpect(status().isConflict());
 
         Place persisted = placeRepository.findById(place.getId()).orElseThrow();
-        assertThat(persisted.getVersion()).isEqualTo(1L);
+        PlaceRevision persistedRevision = revisionRepository
+                .findByPlaceIdAndStatus(place.getId(), PlaceRevisionStatus.DRAFT).orElseThrow();
         assertThat(persisted.getName()).isEqualTo("Unchanged name");
+        assertThat(persistedRevision.getVersion()).isEqualTo(1L);
         assertThat(jdbcTemplate.queryForList(
-                "select url from place_photos where place_id = ?", String.class, place.getId()))
+                "select url from place_revision_photos where revision_id = ?", String.class, persistedRevision.getId()))
                 .containsExactly("https://example.com/first.jpg");
     }
 
@@ -158,7 +164,7 @@ class PlaceControllerTest {
     void organizerCanUpdatePlaceWhilePendingModerationAndVersionIsIncremented() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("organizer-pending-update@example.com", Role.ORGANIZER));
         City city = cityRepository.saveAndFlush(city("Amsterdam Pending Update"));
-        Place place = placeRepository.saveAndFlush(place(city, owner, "Submitted name", PlaceStatus.PENDING_MODERATION));
+        Place place = place(city, owner, "Submitted name", PlaceStatus.PENDING_MODERATION);
 
         mockMvc.perform(put("/api/places/{id}", place.getId())
                         .with(user(principal(owner)))
@@ -181,7 +187,7 @@ class PlaceControllerTest {
     void rejectsPlaceUpdateWithoutVersion() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("organizer-missing-version@example.com", Role.ORGANIZER));
         City city = cityRepository.saveAndFlush(city("Amsterdam Missing Version"));
-        Place place = placeRepository.saveAndFlush(place(city, owner, "Current name", PlaceStatus.DRAFT));
+        Place place = place(city, owner, "Current name", PlaceStatus.DRAFT);
 
         mockMvc.perform(put("/api/places/{id}", place.getId())
                         .with(user(principal(owner)))
@@ -197,7 +203,7 @@ class PlaceControllerTest {
         User owner = userRepository.saveAndFlush(testUser("organizer-owner@example.com", Role.ORGANIZER));
         User anotherOrganizer = userRepository.saveAndFlush(testUser("organizer-another@example.com", Role.ORGANIZER));
         City city = cityRepository.saveAndFlush(city("Amsterdam Forbidden Update"));
-        Place place = placeRepository.saveAndFlush(place(city, owner, "Existing", PlaceStatus.DRAFT));
+        Place place = place(city, owner, "Existing", PlaceStatus.DRAFT);
 
         mockMvc.perform(put("/api/places/{id}", place.getId())
                         .with(user(principal(anotherOrganizer)))
@@ -211,7 +217,7 @@ class PlaceControllerTest {
         User owner = userRepository.saveAndFlush(testUser("organizer-admin-owner@example.com", Role.ORGANIZER));
         User admin = userRepository.saveAndFlush(testUser("admin-update@example.com", Role.ADMIN));
         City city = cityRepository.saveAndFlush(city("Amsterdam Admin Update"));
-        Place place = placeRepository.saveAndFlush(place(city, owner, "Original", PlaceStatus.DRAFT));
+        Place place = place(city, owner, "Original", PlaceStatus.DRAFT);
 
         mockMvc.perform(put("/api/places/{id}", place.getId())
                         .with(user(principal(admin)))
@@ -225,7 +231,7 @@ class PlaceControllerTest {
     void deletesPlaceByArchivingItAndHidesItFromPublicReads() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("organizer-delete@example.com", Role.ORGANIZER));
         City city = cityRepository.saveAndFlush(city("Amsterdam Delete"));
-        Place place = placeRepository.saveAndFlush(place(city, owner, "Published place", PlaceStatus.PUBLISHED));
+        Place place = place(city, owner, "Published place", PlaceStatus.PUBLISHED);
 
         mockMvc.perform(delete("/api/places/{id}", place.getId())
                         .with(user(principal(owner))))
@@ -246,7 +252,7 @@ class PlaceControllerTest {
     void rejectsUpdateToArchivedPlace() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("organizer-archived-update@example.com", Role.ORGANIZER));
         City city = cityRepository.saveAndFlush(city("Amsterdam Archived Update"));
-        Place place = placeRepository.saveAndFlush(place(city, owner, "Archived place", PlaceStatus.ARCHIVED));
+        Place place = place(city, owner, "Archived place", PlaceStatus.ARCHIVED);
 
         mockMvc.perform(put("/api/places/{id}", place.getId())
                         .with(user(principal(owner)))
@@ -263,7 +269,7 @@ class PlaceControllerTest {
     void rejectsPlaceDeletionForRegularUser() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("organizer-user-role-delete@example.com", Role.ORGANIZER));
         City city = cityRepository.saveAndFlush(city("Amsterdam User Role Delete"));
-        Place place = placeRepository.saveAndFlush(place(city, owner, "Protected published place", PlaceStatus.PUBLISHED));
+        Place place = place(city, owner, "Protected published place", PlaceStatus.PUBLISHED);
 
         mockMvc.perform(delete("/api/places/{id}", place.getId())
                         .with(user("regular-user@example.com").roles("USER")))
@@ -277,7 +283,7 @@ class PlaceControllerTest {
         User owner = userRepository.saveAndFlush(testUser("organizer-delete-owner@example.com", Role.ORGANIZER));
         User anotherOrganizer = userRepository.saveAndFlush(testUser("organizer-delete-another@example.com", Role.ORGANIZER));
         City city = cityRepository.saveAndFlush(city("Amsterdam Forbidden Delete"));
-        Place place = placeRepository.saveAndFlush(place(city, owner, "Still published", PlaceStatus.PUBLISHED));
+        Place place = place(city, owner, "Still published", PlaceStatus.PUBLISHED);
 
         mockMvc.perform(delete("/api/places/{id}", place.getId())
                         .with(user(principal(anotherOrganizer))))
@@ -291,7 +297,7 @@ class PlaceControllerTest {
         User owner = userRepository.saveAndFlush(testUser("organizer-admin-delete-owner@example.com", Role.ORGANIZER));
         User admin = userRepository.saveAndFlush(testUser("admin-delete@example.com", Role.ADMIN));
         City city = cityRepository.saveAndFlush(city("Amsterdam Admin Delete"));
-        Place place = placeRepository.saveAndFlush(place(city, owner, "Admin archived place", PlaceStatus.PUBLISHED));
+        Place place = place(city, owner, "Admin archived place", PlaceStatus.PUBLISHED);
 
         mockMvc.perform(delete("/api/places/{id}", place.getId())
                         .with(user(principal(admin))))
@@ -304,7 +310,7 @@ class PlaceControllerTest {
     void rejectsUnauthenticatedPlaceDeletion() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("organizer-unauth-delete@example.com", Role.ORGANIZER));
         City city = cityRepository.saveAndFlush(city("Amsterdam Unauthenticated Delete"));
-        Place place = placeRepository.saveAndFlush(place(city, owner, "Protected place", PlaceStatus.PUBLISHED));
+        Place place = place(city, owner, "Protected place", PlaceStatus.PUBLISHED);
 
         mockMvc.perform(delete("/api/places/{id}", place.getId()))
                 .andExpect(status().isUnauthorized());
@@ -316,7 +322,7 @@ class PlaceControllerTest {
     void authorizesPlaceUpdateByOwnerIdRatherThanEmail() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("organizer-id-owner@example.com", Role.ORGANIZER));
         City city = cityRepository.saveAndFlush(city("Amsterdam Owner Id"));
-        Place place = placeRepository.saveAndFlush(place(city, owner, "Original name", PlaceStatus.DRAFT));
+        Place place = place(city, owner, "Original name", PlaceStatus.DRAFT);
         OnMyWayUserDetails principalWithDifferentEmail = new OnMyWayUserDetails(
                 owner.getId(),
                 "different-email@example.com",
@@ -337,8 +343,8 @@ class PlaceControllerTest {
     void returnsOnlyPublishedPlacesForCity() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("organizer-published@example.com", Role.ORGANIZER));
         City city = cityRepository.saveAndFlush(city("Amsterdam Published"));
-        placeRepository.saveAndFlush(place(city, owner, "Draft", PlaceStatus.DRAFT));
-        placeRepository.saveAndFlush(place(city, owner, "Published", PlaceStatus.PUBLISHED));
+        place(city, owner, "Draft", PlaceStatus.DRAFT);
+        place(city, owner, "Published", PlaceStatus.PUBLISHED);
 
         mockMvc.perform(get("/api/places").param("cityId", city.getId().toString()))
                 .andExpect(status().isOk())
@@ -352,12 +358,14 @@ class PlaceControllerTest {
         City city = cityRepository.saveAndFlush(city("Amsterdam Search"));
         City anotherCity = cityRepository.saveAndFlush(city("Rotterdam Search"));
 
-        placeRepository.saveAndFlush(place(city, owner, "Museumplein", PlaceStatus.PUBLISHED));
+        place(city, owner, "Museumplein", PlaceStatus.PUBLISHED);
         Place descriptionMatch = place(city, owner, "Rijksmuseum", PlaceStatus.PUBLISHED);
-        descriptionMatch.setDescription("Collection of Dutch paintings");
-        placeRepository.saveAndFlush(descriptionMatch);
-        placeRepository.saveAndFlush(place(city, owner, "Hidden Museum", PlaceStatus.DRAFT));
-        placeRepository.saveAndFlush(place(anotherCity, owner, "Museum in another city", PlaceStatus.PUBLISHED));
+        PlaceRevision descriptionRevision = revisionRepository
+                .findByPlaceIdAndStatus(descriptionMatch.getId(), PlaceRevisionStatus.PUBLISHED).orElseThrow();
+        descriptionRevision.setDescription("Collection of Dutch paintings");
+        revisionRepository.saveAndFlush(descriptionRevision);
+        place(city, owner, "Hidden Museum", PlaceStatus.DRAFT);
+        place(anotherCity, owner, "Museum in another city", PlaceStatus.PUBLISHED);
 
         mockMvc.perform(get("/api/places")
                         .param("cityId", city.getId().toString())
@@ -379,8 +387,8 @@ class PlaceControllerTest {
     void treatsBlankSearchQueryAsNoFilter() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("organizer-blank-search@example.com", Role.ORGANIZER));
         City city = cityRepository.saveAndFlush(city("Amsterdam Blank Search"));
-        placeRepository.saveAndFlush(place(city, owner, "Published place", PlaceStatus.PUBLISHED));
-        placeRepository.saveAndFlush(place(city, owner, "Draft place", PlaceStatus.DRAFT));
+        place(city, owner, "Published place", PlaceStatus.PUBLISHED);
+        place(city, owner, "Draft place", PlaceStatus.DRAFT);
 
         mockMvc.perform(get("/api/places")
                         .param("cityId", city.getId().toString())
@@ -395,10 +403,10 @@ class PlaceControllerTest {
     void treatsLikeWildcardAndEscapeCharactersAsLiteralSearchText() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("organizer-search-wildcards@example.com", Role.ORGANIZER));
         City city = cityRepository.saveAndFlush(city("Amsterdam Search Wildcards"));
-        placeRepository.saveAndFlush(place(city, owner, "100% Fun", PlaceStatus.PUBLISHED));
-        placeRepository.saveAndFlush(place(city, owner, "A_B Cafe", PlaceStatus.PUBLISHED));
-        placeRepository.saveAndFlush(place(city, owner, "AXB Cafe", PlaceStatus.PUBLISHED));
-        placeRepository.saveAndFlush(place(city, owner, "Bang! Cafe", PlaceStatus.PUBLISHED));
+        place(city, owner, "100% Fun", PlaceStatus.PUBLISHED);
+        place(city, owner, "A_B Cafe", PlaceStatus.PUBLISHED);
+        place(city, owner, "AXB Cafe", PlaceStatus.PUBLISHED);
+        place(city, owner, "Bang! Cafe", PlaceStatus.PUBLISHED);
 
         mockMvc.perform(get("/api/places")
                         .param("cityId", city.getId().toString())
@@ -426,10 +434,10 @@ class PlaceControllerTest {
     void paginatesPublishedPlacesAndPreservesSearchAndStableOrdering() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("organizer-pagination@example.com", Role.ORGANIZER));
         City city = cityRepository.saveAndFlush(city("Amsterdam Pagination"));
-        placeRepository.saveAndFlush(place(city, owner, "Cafe Alpha", PlaceStatus.PUBLISHED));
-        placeRepository.saveAndFlush(place(city, owner, "Cafe Beta", PlaceStatus.PUBLISHED));
-        placeRepository.saveAndFlush(place(city, owner, "Cafe Gamma", PlaceStatus.PUBLISHED));
-        placeRepository.saveAndFlush(place(city, owner, "Cafe Hidden", PlaceStatus.DRAFT));
+        place(city, owner, "Cafe Alpha", PlaceStatus.PUBLISHED);
+        place(city, owner, "Cafe Beta", PlaceStatus.PUBLISHED);
+        place(city, owner, "Cafe Gamma", PlaceStatus.PUBLISHED);
+        place(city, owner, "Cafe Hidden", PlaceStatus.DRAFT);
 
         mockMvc.perform(get("/api/places")
                         .param("cityId", city.getId().toString())
@@ -501,8 +509,8 @@ class PlaceControllerTest {
     void usesStablePaginationDefaultsAndExplicitResponseContract() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("organizer-pagination-defaults@example.com", Role.ORGANIZER));
         City city = cityRepository.saveAndFlush(city("Amsterdam Pagination Defaults"));
-        placeRepository.saveAndFlush(place(city, owner, "Published Alpha", PlaceStatus.PUBLISHED));
-        placeRepository.saveAndFlush(place(city, owner, "Published Beta", PlaceStatus.PUBLISHED));
+        place(city, owner, "Published Alpha", PlaceStatus.PUBLISHED);
+        place(city, owner, "Published Beta", PlaceStatus.PUBLISHED);
 
         mockMvc.perform(get("/api/places").param("cityId", city.getId().toString()))
                 .andExpect(status().isOk())
@@ -520,8 +528,8 @@ class PlaceControllerTest {
     void ordersPlacesWithSameNameById() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("organizer-pagination-ties@example.com", Role.ORGANIZER));
         City city = cityRepository.saveAndFlush(city("Amsterdam Pagination Ties"));
-        Place first = placeRepository.saveAndFlush(place(city, owner, "Same name", PlaceStatus.PUBLISHED));
-        Place second = placeRepository.saveAndFlush(place(city, owner, "Same name", PlaceStatus.PUBLISHED));
+        Place first = place(city, owner, "Same name", PlaceStatus.PUBLISHED);
+        Place second = place(city, owner, "Same name", PlaceStatus.PUBLISHED);
 
         mockMvc.perform(get("/api/places")
                         .param("cityId", city.getId().toString())
@@ -546,7 +554,7 @@ class PlaceControllerTest {
     void acceptsMaximumPageSize() throws Exception {
         User owner = userRepository.saveAndFlush(testUser("organizer-pagination-max-size@example.com", Role.ORGANIZER));
         City city = cityRepository.saveAndFlush(city("Amsterdam Pagination Max Size"));
-        placeRepository.saveAndFlush(place(city, owner, "Maximum size boundary", PlaceStatus.PUBLISHED));
+        place(city, owner, "Maximum size boundary", PlaceStatus.PUBLISHED);
 
         mockMvc.perform(get("/api/places")
                         .param("cityId", city.getId().toString())
@@ -593,6 +601,124 @@ class PlaceControllerTest {
                 .andExpect(status().isBadRequest());
     }
 
+    @Test
+    void publishedPlaceChangesRemainPrivateUntilTheNewRevisionIsApproved() throws Exception {
+        User owner = userRepository.saveAndFlush(testUser("revision-lifecycle-owner@example.com", Role.ORGANIZER));
+        User moderator = userRepository.saveAndFlush(testUser("revision-lifecycle-moderator@example.com", Role.MODERATOR));
+        City city = cityRepository.saveAndFlush(city("Amsterdam Revision Lifecycle"));
+
+        var created = mockMvc.perform(post("/api/places")
+                        .with(user(principal(owner)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"cityId\":" + city.getId() + ",\"name\":\"Original\",\"description\":\"Public description\",\"latitude\":52.360000,\"longitude\":4.885200," +
+                                "\"photos\":[{\"url\":\"https://example.com/original.jpg\",\"position\":0,\"description\":\"Original photo\"}]," +
+                                "\"contacts\":[{\"type\":\"WEBSITE\",\"value\":\"https://example.com/original\"}]," +
+                                "\"openingHours\":[{\"dayOfWeek\":\"MONDAY\",\"openingTime\":\"09:00\",\"closingTime\":\"18:00\",\"closed\":false}]}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.version").value(0))
+                .andReturn();
+        Long placeId = new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree(created.getResponse().getContentAsString()).get("id").asLong();
+
+        mockMvc.perform(post("/api/places/{id}/submit-for-moderation", placeId)
+                        .with(user(principal(owner))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PENDING_MODERATION"))
+                .andExpect(jsonPath("$.version").value(1));
+
+        mockMvc.perform(post("/api/moderation/places/{id}/publish", placeId)
+                        .with(user(principal(moderator)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"version\":1}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PUBLISHED"))
+                .andExpect(jsonPath("$.version").value(2));
+
+        mockMvc.perform(get("/api/places/{id}", placeId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Original"));
+
+        mockMvc.perform(put("/api/places/{id}", placeId)
+                        .with(user(principal(owner)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"version\":2,\"name\":\"Candidate\",\"description\":\"Candidate description\",\"latitude\":52.370000,\"longitude\":4.900000," +
+                                "\"photos\":[{\"url\":\"https://example.com/candidate.jpg\",\"position\":0,\"description\":\"Candidate photo\"}]," +
+                                "\"contacts\":[{\"type\":\"WEBSITE\",\"value\":\"https://example.com/candidate\"}]," +
+                                "\"openingHours\":[{\"dayOfWeek\":\"MONDAY\",\"openingTime\":\"10:00\",\"closingTime\":\"19:00\",\"closed\":false}]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.version").value(3))
+                .andExpect(jsonPath("$.name").value("Candidate"));
+
+        mockMvc.perform(get("/api/places/{id}", placeId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Original"))
+                .andExpect(jsonPath("$.description").value("Public description"))
+                .andExpect(jsonPath("$.photos[0].url").value("https://example.com/original.jpg"))
+                .andExpect(jsonPath("$.contacts[0].value").value("https://example.com/original"))
+                .andExpect(jsonPath("$.openingHours[0].openingTime").value(org.hamcrest.Matchers.startsWith("09:00")));
+
+        mockMvc.perform(post("/api/places/{id}/submit-for-moderation", placeId)
+                        .with(user(principal(owner))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.version").value(4));
+
+        var queueResult = mockMvc.perform(get("/api/moderation/places/pending").with(user(principal(moderator))))
+                .andExpect(status().isOk())
+                .andReturn();
+        var queueJson = new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree(queueResult.getResponse().getContentAsString());
+        var candidateInQueue = java.util.stream.StreamSupport.stream(queueJson.spliterator(), false)
+                .filter(item -> item.get("id").asLong() == placeId)
+                .findFirst()
+                .orElseThrow();
+        assertThat(candidateInQueue.get("name").asText()).isEqualTo("Candidate");
+        assertThat(candidateInQueue.get("version").asLong()).isEqualTo(4);
+
+        mockMvc.perform(post("/api/moderation/places/{id}/reject", placeId)
+                        .with(user(principal(moderator)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"version\":4,\"reason\":\"Needs more details\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("REJECTED"));
+
+        mockMvc.perform(get("/api/places/{id}", placeId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Original"));
+
+        mockMvc.perform(get("/api/places/{id}/manage", placeId).with(user(principal(owner))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Candidate"))
+                .andExpect(jsonPath("$.status").value("REJECTED"))
+                .andExpect(jsonPath("$.photos[0].url").value("https://example.com/candidate.jpg"))
+                .andExpect(jsonPath("$.contacts[0].value").value("https://example.com/candidate"))
+                .andExpect(jsonPath("$.openingHours[0].openingTime").value(org.hamcrest.Matchers.startsWith("10:00")));
+
+        mockMvc.perform(post("/api/places/{id}/submit-for-moderation", placeId)
+                        .with(user(principal(owner))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.version").value(6));
+
+        mockMvc.perform(post("/api/moderation/places/{id}/publish", placeId)
+                        .with(user(principal(moderator)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"version\":6}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PUBLISHED"));
+
+        mockMvc.perform(get("/api/places/{id}", placeId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Candidate"))
+                .andExpect(jsonPath("$.description").value("Candidate description"))
+                .andExpect(jsonPath("$.photos[0].url").value("https://example.com/candidate.jpg"))
+                .andExpect(jsonPath("$.contacts[0].value").value("https://example.com/candidate"))
+                .andExpect(jsonPath("$.openingHours[0].openingTime").value(org.hamcrest.Matchers.startsWith("10:00")));
+
+        assertThat(revisionRepository.findByPlaceIdAndStatus(placeId, PlaceRevisionStatus.SUPERSEDED))
+                .isPresent();
+        assertThat(revisionRepository.findByPlaceIdAndStatus(placeId, PlaceRevisionStatus.PUBLISHED))
+                .isPresent();
+    }
+
     private OnMyWayUserDetails principal(User user) {
         return new OnMyWayUserDetails(
                 user.getId(),
@@ -632,6 +758,18 @@ class PlaceControllerTest {
         place.setStatus(status);
         place.setLatitude(new BigDecimal("52.360000"));
         place.setLongitude(new BigDecimal("4.885200"));
+        placeRepository.saveAndFlush(place);
+        PlaceRevision revision = new PlaceRevision();
+        revision.setPlace(place);
+        revision.setName(name);
+        revision.setLatitude(place.getLatitude());
+        revision.setLongitude(place.getLongitude());
+        revision.setStatus(PlaceRevisionStatus.valueOf(status.name()));
+        revisionRepository.saveAndFlush(revision);
+        if (status == PlaceStatus.PUBLISHED) {
+            place.setPublishedRevision(revision);
+            placeRepository.saveAndFlush(place);
+        }
         return place;
     }
 }

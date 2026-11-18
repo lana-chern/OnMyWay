@@ -7,7 +7,7 @@ import java.util.List;
 
 @Schema(description = "Fields to update for an existing place. The version provides optimistic concurrency control.")
 public record UpdatePlaceRequest(
-        @Schema(description = "Current version of the place. Must match the version last read by the client.", example = "3")
+        @Schema(description = "Current revision version. Must match the version last read by the client.", example = "3")
         Long version,
         @Schema(description = "Updated display name of the place.", example = "Samara Regional Museum")
         String name,

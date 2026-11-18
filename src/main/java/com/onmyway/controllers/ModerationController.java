@@ -34,7 +34,7 @@ public class ModerationController {
     public PlaceResponse publish(
             @Parameter(description = "Unique ID of the pending place submission to publish.", example = "42")
             @PathVariable Long id,
-            @RequestBody(description = "Expected version of the place reviewed by the moderator.",
+            @RequestBody(description = "Expected version of the revision reviewed by the moderator.",
                     required = true, content = @Content(schema = @Schema(implementation = PublishPlaceRequest.class)))
             @org.springframework.web.bind.annotation.RequestBody PublishPlaceRequest request,
             @AuthenticationPrincipal OnMyWayUserDetails principal) {
@@ -45,7 +45,7 @@ public class ModerationController {
     public PlaceResponse reject(
             @Parameter(description = "Unique ID of the pending place submission to reject.", example = "42")
             @PathVariable Long id,
-            @RequestBody(description = "Expected version and rejection reason for the reviewed submission.",
+            @RequestBody(description = "Expected revision version and rejection reason for the reviewed submission.",
                     required = true, content = @Content(schema = @Schema(implementation = RejectPlaceRequest.class)))
             @org.springframework.web.bind.annotation.RequestBody RejectPlaceRequest request,
             @AuthenticationPrincipal OnMyWayUserDetails principal) {
