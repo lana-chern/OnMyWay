@@ -18,6 +18,7 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
             select p from Place p
             join p.publishedRevision r
             where p.city.id = :cityId
+              and p.status <> com.onmyway.data.entities.PlaceStatus.ARCHIVED
               and r.status = com.onmyway.data.entities.PlaceRevisionStatus.PUBLISHED
               and (:query is null
                    or lower(r.name) like lower(concat('%', :query, '%')) escape '!'
