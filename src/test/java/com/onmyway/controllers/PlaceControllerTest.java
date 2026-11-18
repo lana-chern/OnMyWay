@@ -150,10 +150,12 @@ class PlaceControllerTest {
                 .andExpect(status().isConflict());
 
         Place persisted = placeRepository.findById(place.getId()).orElseThrow();
-        assertThat(persisted.getVersion()).isEqualTo(1L);
+        PlaceRevision persistedRevision = revisionRepository
+                .findByPlaceIdAndStatus(place.getId(), PlaceRevisionStatus.DRAFT).orElseThrow();
         assertThat(persisted.getName()).isEqualTo("Unchanged name");
+        assertThat(persistedRevision.getVersion()).isEqualTo(1L);
         assertThat(jdbcTemplate.queryForList(
-                "select url from place_photos where place_id = ?", String.class, place.getId()))
+                "select url from place_revision_photos where revision_id = ?", String.class, persistedRevision.getId()))
                 .containsExactly("https://example.com/first.jpg");
     }
 
