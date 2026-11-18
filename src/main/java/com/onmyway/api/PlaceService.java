@@ -197,6 +197,9 @@ public class PlaceService {
             PlaceRevision previous = place.getPublishedRevision();
             if (previous != null && !Objects.equals(previous.getId(), candidate.getId())) {
                 previous.setStatus(PlaceRevisionStatus.SUPERSEDED);
+                // Free the partial unique index before promoting the candidate; both updates
+                // remain inside the same transaction and are committed atomically.
+                revisionRepository.flush();
             }
             candidate.setRejectionReason(null);
             candidate.setStatus(PlaceRevisionStatus.PUBLISHED);
