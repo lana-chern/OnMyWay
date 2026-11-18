@@ -69,7 +69,7 @@ public class PlaceController {
     public PlaceResponse update(
             @Parameter(description = "Unique ID of the place to update.", example = "42")
             @PathVariable Long id,
-            @RequestBody(description = "Fields to update. The version must match the current place version.",
+            @RequestBody(description = "Fields to update. The version must match the current working revision version.",
                     required = true, content = @Content(schema = @Schema(implementation = UpdatePlaceRequest.class)))
             @org.springframework.web.bind.annotation.RequestBody UpdatePlaceRequest request,
             @AuthenticationPrincipal OnMyWayUserDetails principal) {
