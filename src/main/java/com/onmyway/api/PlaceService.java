@@ -229,7 +229,7 @@ public class PlaceService {
         copy.setStatus(PlaceRevisionStatus.DRAFT);
         // Keep the API version monotonic across revision generations so stale requests
         // from a just-published revision cannot accidentally edit its successor.
-        copy.setVersion(source.getVersion() + 1);
+        copy.setVersion(source.getVersion());
         copy.setName(source.getName());
         copy.setDescription(source.getDescription());
         copy.setLatitude(source.getLatitude());
@@ -258,7 +258,7 @@ public class PlaceService {
             clone.setClosed(hours.isClosed());
             copy.getOpeningHours().add(clone);
         });
-        return revisionRepository.save(copy);
+        return revisionRepository.saveAndFlush(copy);
     }
 
     private java.util.Optional<PlaceRevision> findWorkingRevision(Long placeId) {
