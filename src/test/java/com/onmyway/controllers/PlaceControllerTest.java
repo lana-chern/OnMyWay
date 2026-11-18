@@ -610,7 +610,10 @@ class PlaceControllerTest {
         var created = mockMvc.perform(post("/api/places")
                         .with(user(principal(owner)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"cityId\":" + city.getId() + ",\"name\":\"Original\",\"description\":\"Public description\",\"latitude\":52.360000,\"longitude\":4.885200}"))
+                        .content("{\"cityId\":" + city.getId() + ",\"name\":\"Original\",\"description\":\"Public description\",\"latitude\":52.360000,\"longitude\":4.885200," +
+                                "\"photos\":[{\"url\":\"https://example.com/original.jpg\",\"position\":0,\"description\":\"Original photo\"}]," +
+                                "\"contacts\":[{\"type\":\"WEBSITE\",\"value\":\"https://example.com/original\"}]," +
+                                "\"openingHours\":[{\"dayOfWeek\":\"MONDAY\",\"openingTime\":\"09:00\",\"closingTime\":\"18:00\",\"closed\":false}]}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.version").value(0))
                 .andReturn();
@@ -638,7 +641,10 @@ class PlaceControllerTest {
         mockMvc.perform(put("/api/places/{id}", placeId)
                         .with(user(principal(owner)))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"version\":2,\"name\":\"Candidate\",\"description\":\"Candidate description\",\"latitude\":52.370000,\"longitude\":4.900000}"))
+                        .content("{\"version\":2,\"name\":\"Candidate\",\"description\":\"Candidate description\",\"latitude\":52.370000,\"longitude\":4.900000," +
+                                "\"photos\":[{\"url\":\"https://example.com/candidate.jpg\",\"position\":0,\"description\":\"Candidate photo\"}]," +
+                                "\"contacts\":[{\"type\":\"WEBSITE\",\"value\":\"https://example.com/candidate\"}]," +
+                                "\"openingHours\":[{\"dayOfWeek\":\"MONDAY\",\"openingTime\":\"10:00\",\"closingTime\":\"19:00\",\"closed\":false}]}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.version").value(3))
                 .andExpect(jsonPath("$.name").value("Candidate"));
@@ -646,7 +652,10 @@ class PlaceControllerTest {
         mockMvc.perform(get("/api/places/{id}", placeId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("Original"))
-                .andExpect(jsonPath("$.description").value("Public description"));
+                .andExpect(jsonPath("$.description").value("Public description"))
+                .andExpect(jsonPath("$.photos[0].url").value("https://example.com/original.jpg"))
+                .andExpect(jsonPath("$.contacts[0].value").value("https://example.com/original"))
+                .andExpect(jsonPath("$.openingHours[0].openingTime").value("09:00"));
 
         mockMvc.perform(post("/api/places/{id}/submit-for-moderation", placeId)
                         .with(user(principal(owner))))
@@ -679,7 +688,10 @@ class PlaceControllerTest {
         mockMvc.perform(get("/api/places/{id}/manage", placeId).with(user(principal(owner))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("Candidate"))
-                .andExpect(jsonPath("$.status").value("REJECTED"));
+                .andExpect(jsonPath("$.status").value("REJECTED"))
+                .andExpect(jsonPath("$.photos[0].url").value("https://example.com/candidate.jpg"))
+                .andExpect(jsonPath("$.contacts[0].value").value("https://example.com/candidate"))
+                .andExpect(jsonPath("$.openingHours[0].openingTime").value("10:00"));
 
         mockMvc.perform(post("/api/places/{id}/submit-for-moderation", placeId)
                         .with(user(principal(owner))))
@@ -696,7 +708,10 @@ class PlaceControllerTest {
         mockMvc.perform(get("/api/places/{id}", placeId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("Candidate"))
-                .andExpect(jsonPath("$.description").value("Candidate description"));
+                .andExpect(jsonPath("$.description").value("Candidate description"))
+                .andExpect(jsonPath("$.photos[0].url").value("https://example.com/candidate.jpg"))
+                .andExpect(jsonPath("$.contacts[0].value").value("https://example.com/candidate"))
+                .andExpect(jsonPath("$.openingHours[0].openingTime").value("10:00"));
 
         assertThat(revisionRepository.findByPlaceIdAndStatus(placeId, PlaceRevisionStatus.SUPERSEDED))
                 .isPresent();
