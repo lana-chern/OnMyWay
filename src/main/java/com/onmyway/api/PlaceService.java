@@ -153,6 +153,7 @@ public class PlaceService {
             throw new IllegalStateException("Only draft or rejected revisions can be submitted for moderation");
         }
         revision.setRejectionReason(null);
+        place.setRejectionReason(null);
         revision.setStatus(PlaceRevisionStatus.PENDING_MODERATION);
         if (place.getPublishedRevision() == null) place.setStatus(PlaceStatus.PENDING_MODERATION);
         revisionRepository.flush();
@@ -202,12 +203,14 @@ public class PlaceService {
                 revisionRepository.flush();
             }
             candidate.setRejectionReason(null);
+            place.setRejectionReason(null);
             candidate.setStatus(PlaceRevisionStatus.PUBLISHED);
             place.setPublishedRevision(candidate);
             place.setStatus(PlaceStatus.PUBLISHED);
             syncLegacyScalars(place, candidate);
         } else {
             candidate.setRejectionReason(rejectionReason);
+            place.setRejectionReason(rejectionReason);
             candidate.setStatus(PlaceRevisionStatus.REJECTED);
             place.setStatus(place.getPublishedRevision() == null ? PlaceStatus.REJECTED : PlaceStatus.PUBLISHED);
         }
