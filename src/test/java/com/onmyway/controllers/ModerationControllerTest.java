@@ -297,7 +297,7 @@ class ModerationControllerTest {
         PlaceRevision pendingRevision = revisionRepository
                 .findByPlaceIdAndStatus(place.getId(), PlaceRevisionStatus.PENDING_MODERATION).orElseThrow();
         pendingRevision.setRejectionReason("Old rejection reason");
-        revisionRepository.saveAndFlush(pendingRevision);
+        pendingRevision = revisionRepository.saveAndFlush(pendingRevision);
 
         mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
                         .with(user(principal(moderator)))
