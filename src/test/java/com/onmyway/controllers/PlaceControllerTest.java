@@ -3,6 +3,8 @@ package com.onmyway.controllers;
 import com.onmyway.auth.OnMyWayUserDetails;
 import com.onmyway.data.entities.City;
 import com.onmyway.data.entities.Place;
+import com.onmyway.data.entities.PlaceRevision;
+import com.onmyway.data.entities.PlaceRevisionStatus;
 import com.onmyway.data.entities.PlaceStatus;
 import com.onmyway.data.entities.Role;
 import com.onmyway.data.entities.User;
