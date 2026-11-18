@@ -258,7 +258,7 @@ public class PlaceService {
             clone.setClosed(hours.isClosed());
             copy.getOpeningHours().add(clone);
         });
-        return revisionRepository.saveAndFlush(copy);
+        return revisionRepository.save(copy);
     }
 
     private java.util.Optional<PlaceRevision> findWorkingRevision(Long placeId) {
