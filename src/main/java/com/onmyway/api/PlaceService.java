@@ -294,8 +294,13 @@ public class PlaceService {
         revision.setDescription(description);
         revision.setLatitude(latitude);
         revision.setLongitude(longitude);
-        // Child collection replacements must advance the revision's @Version as well.
-        revision.setUpdatedAt(java.time.Instant.now());
+        // Child collection replacements must advance the revision's @Version as well,
+        // even when the scalar content is unchanged and both operations happen in one clock tick.
+        java.time.Instant touchedAt = java.time.Instant.now();
+        if (revision.getUpdatedAt() != null && !touchedAt.isAfter(revision.getUpdatedAt())) {
+            touchedAt = revision.getUpdatedAt().plusNanos(1);
+        }
+        revision.setUpdatedAt(touchedAt);
         revision.getPhotos().clear();
         if (photos != null) for (var request : photos) {
             PlaceRevisionPhoto photo = new PlaceRevisionPhoto();
