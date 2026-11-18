@@ -621,7 +621,8 @@ class ModerationControllerTest {
 
         Place persisted = placeRepository.findById(place.getId()).orElseThrow();
         assertThat(persisted.getStatus()).isEqualTo(PlaceStatus.PENDING_MODERATION);
-        assertThat(persisted.getName()).isEqualTo("Updated by organizer");
+        assertThat(revisionRepository.findByPlaceIdAndStatus(place.getId(), PlaceRevisionStatus.PENDING_MODERATION)
+                .orElseThrow().getName()).isEqualTo("Updated by organizer");
         assertThat(persisted.getRejectionReason()).isNull();
     }
 
@@ -645,7 +646,8 @@ class ModerationControllerTest {
 
         Place persisted = placeRepository.findById(place.getId()).orElseThrow();
         assertThat(persisted.getStatus()).isEqualTo(PlaceStatus.PENDING_MODERATION);
-        assertThat(persisted.getName()).isEqualTo("Updated by organizer");
+        assertThat(revisionRepository.findByPlaceIdAndStatus(place.getId(), PlaceRevisionStatus.PENDING_MODERATION)
+                .orElseThrow().getName()).isEqualTo("Updated by organizer");
     }
 
     private OnMyWayUserDetails principal(User user) {
