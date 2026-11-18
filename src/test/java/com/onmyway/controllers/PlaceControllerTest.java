@@ -8,6 +8,7 @@ import com.onmyway.data.entities.Role;
 import com.onmyway.data.entities.User;
 import com.onmyway.data.repositories.CityRepository;
 import com.onmyway.data.repositories.PlaceRepository;
+import com.onmyway.data.repositories.PlaceRevisionRepository;
 import com.onmyway.data.repositories.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,6 +35,7 @@ class PlaceControllerTest {
     @Autowired MockMvc mockMvc;
     @Autowired CityRepository cityRepository;
     @Autowired PlaceRepository placeRepository;
+    @Autowired PlaceRevisionRepository revisionRepository;
     @Autowired UserRepository userRepository;
     @Autowired JdbcTemplate jdbcTemplate;
 
@@ -632,6 +634,15 @@ class PlaceControllerTest {
         place.setStatus(status);
         place.setLatitude(new BigDecimal("52.360000"));
         place.setLongitude(new BigDecimal("4.885200"));
+        placeRepository.saveAndFlush(place);
+        PlaceRevision revision = new PlaceRevision();
+        revision.setPlace(place);
+        revision.setName(name);
+        revision.setLatitude(place.getLatitude());
+        revision.setLongitude(place.getLongitude());
+        revision.setStatus(PlaceRevisionStatus.valueOf(status.name()));
+        revisionRepository.saveAndFlush(revision);
+        if (status == PlaceStatus.PUBLISHED) place.setPublishedRevision(revision);
         return place;
     }
 }
