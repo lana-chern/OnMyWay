@@ -96,9 +96,11 @@ class ModerationControllerTest {
         User moderator = userRepository.saveAndFlush(testUser("moderation-queue-version-mod@example.com", Role.MODERATOR));
         Place place = placeRepository.saveAndFlush(place(owner, "Original pending place", PlaceStatus.PENDING_MODERATION));
 
-        place.setName("Updated by organizer");
-        placeRepository.saveAndFlush(place);
-        long currentVersion = placeRepository.findById(place.getId()).orElseThrow().getVersion();
+        PlaceRevision workingRevision = revisionRepository
+                .findByPlaceIdAndStatus(place.getId(), PlaceRevisionStatus.PENDING_MODERATION).orElseThrow();
+        workingRevision.setName("Updated by organizer");
+        revisionRepository.saveAndFlush(workingRevision);
+        long currentVersion = revisionRepository.findById(workingRevision.getId()).orElseThrow().getVersion();
 
         var queueResponse = mockMvc.perform(get("/api/moderation/places/pending")
                         .with(user(principal(moderator))))
@@ -604,10 +606,12 @@ class ModerationControllerTest {
         User owner = userRepository.saveAndFlush(testUser("moderation-stale-reject-owner@example.com", Role.ORGANIZER));
         User moderator = userRepository.saveAndFlush(testUser("moderation-stale-reject-mod@example.com", Role.MODERATOR));
         Place place = placeRepository.saveAndFlush(place(owner, "Pending place", PlaceStatus.PENDING_MODERATION));
-        long reviewedVersion = place.getVersion();
+        PlaceRevision workingRevision = revisionRepository
+                .findByPlaceIdAndStatus(place.getId(), PlaceRevisionStatus.PENDING_MODERATION).orElseThrow();
+        long reviewedVersion = workingRevision.getVersion();
 
-        place.setName("Updated by organizer");
-        placeRepository.saveAndFlush(place);
+        workingRevision.setName("Updated by organizer");
+        revisionRepository.saveAndFlush(workingRevision);
 
         mockMvc.perform(post("/api/moderation/places/{id}/reject", place.getId())
                         .with(user(principal(moderator)))
@@ -626,10 +630,12 @@ class ModerationControllerTest {
         User owner = userRepository.saveAndFlush(testUser("moderation-stale-owner@example.com", Role.ORGANIZER));
         User moderator = userRepository.saveAndFlush(testUser("moderation-stale-mod@example.com", Role.MODERATOR));
         Place place = placeRepository.saveAndFlush(place(owner, "Pending place", PlaceStatus.PENDING_MODERATION));
-        long reviewedVersion = place.getVersion();
+        PlaceRevision workingRevision = revisionRepository
+                .findByPlaceIdAndStatus(place.getId(), PlaceRevisionStatus.PENDING_MODERATION).orElseThrow();
+        long reviewedVersion = workingRevision.getVersion();
 
-        place.setName("Updated by organizer");
-        placeRepository.saveAndFlush(place);
+        workingRevision.setName("Updated by organizer");
+        revisionRepository.saveAndFlush(workingRevision);
 
         mockMvc.perform(post("/api/moderation/places/{id}/publish", place.getId())
                         .with(user(principal(moderator)))
