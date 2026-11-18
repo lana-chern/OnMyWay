@@ -227,6 +227,9 @@ public class PlaceService {
         PlaceRevision copy = new PlaceRevision();
         copy.setPlace(place);
         copy.setStatus(PlaceRevisionStatus.DRAFT);
+        // Keep the API version monotonic across revision generations so stale requests
+        // from a just-published revision cannot accidentally edit its successor.
+        copy.setVersion(source.getVersion() + 1);
         copy.setName(source.getName());
         copy.setDescription(source.getDescription());
         copy.setLatitude(source.getLatitude());
