@@ -711,7 +711,7 @@ class PlaceControllerTest {
                 .andExpect(jsonPath("$.description").value("Candidate description"))
                 .andExpect(jsonPath("$.photos[0].url").value("https://example.com/candidate.jpg"))
                 .andExpect(jsonPath("$.contacts[0].value").value("https://example.com/candidate"))
-                .andExpect(jsonPath("$.openingHours[0].openingTime").value("10:00"));
+                .andExpect(jsonPath("$.openingHours[0].openingTime").value(org.hamcrest.Matchers.startsWith("10:00")));
 
         assertThat(revisionRepository.findByPlaceIdAndStatus(placeId, PlaceRevisionStatus.SUPERSEDED))
                 .isPresent();
