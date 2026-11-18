@@ -9,39 +9,36 @@ import java.util.List;
 
 public record PlaceResponse(
         Long id, Long version, Long cityId, String name, String description,
-        BigDecimal latitude, BigDecimal longitude, PlaceStatus status,
+        BigDecimal latitude, BigDecimal longitude, PlaceRevisionStatus status,
         String rejectionReason,
         List<PhotoResponse> photos, List<ContactResponse> contacts,
         List<OpeningHoursResponse> openingHours) {
 
-    public static PlaceResponse from(Place place) {
-        return from(place, place.getVersion());
-    }
-
-    public static PlaceResponse from(Place place, Long version) {
+    public static PlaceResponse from(Place place, PlaceRevision revision) {
         return new PlaceResponse(
-                place.getId(), version, place.getCity().getId(), place.getName(), place.getDescription(),
-                place.getLatitude(), place.getLongitude(), place.getStatus(), place.getRejectionReason(),
-                place.getPhotos().stream().map(PhotoResponse::from).toList(),
-                place.getContacts().stream().map(ContactResponse::from).toList(),
-                place.getOpeningHours().stream().map(OpeningHoursResponse::from).toList());
+                place.getId(), revision.getVersion(), place.getCity().getId(), revision.getName(),
+                revision.getDescription(), revision.getLatitude(), revision.getLongitude(),
+                revision.getStatus(), revision.getRejectionReason(),
+                revision.getPhotos().stream().map(PhotoResponse::from).toList(),
+                revision.getContacts().stream().map(ContactResponse::from).toList(),
+                revision.getOpeningHours().stream().map(OpeningHoursResponse::from).toList());
     }
 
     public record PhotoResponse(Long id, String url, Integer position, String description) {
-        static PhotoResponse from(PlacePhoto photo) {
+        static PhotoResponse from(PlaceRevisionPhoto photo) {
             return new PhotoResponse(photo.getId(), photo.getUrl(), photo.getPosition(), photo.getDescription());
         }
     }
 
     public record ContactResponse(Long id, PlaceContactType type, String value) {
-        static ContactResponse from(PlaceContact contact) {
+        static ContactResponse from(PlaceRevisionContact contact) {
             return new ContactResponse(contact.getId(), contact.getType(), contact.getValue());
         }
     }
 
     public record OpeningHoursResponse(Long id, DayOfWeek dayOfWeek, LocalTime openingTime,
                                        LocalTime closingTime, boolean closed) {
-        static OpeningHoursResponse from(PlaceOpeningHours hours) {
+        static OpeningHoursResponse from(PlaceRevisionOpeningHours hours) {
             return new OpeningHoursResponse(hours.getId(), hours.getDayOfWeek(), hours.getOpeningTime(),
                     hours.getClosingTime(), hours.isClosed());
         }
