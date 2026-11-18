@@ -653,10 +653,17 @@ class PlaceControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.version").value(4));
 
-        mockMvc.perform(get("/api/moderation/places/pending").with(user(principal(moderator))))
+        var queueResult = mockMvc.perform(get("/api/moderation/places/pending").with(user(principal(moderator))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].name").value("Candidate"))
-                .andExpect(jsonPath("$[0].version").value(4));
+                .andReturn();
+        var queueJson = new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree(queueResult.getResponse().getContentAsString());
+        var candidateInQueue = java.util.stream.StreamSupport.stream(queueJson.spliterator(), false)
+                .filter(item -> item.get("id").asLong() == placeId)
+                .findFirst()
+                .orElseThrow();
+        assertThat(candidateInQueue.get("name").asText()).isEqualTo("Candidate");
+        assertThat(candidateInQueue.get("version").asLong()).isEqualTo(4);
 
         mockMvc.perform(post("/api/moderation/places/{id}/reject", placeId)
                         .with(user(principal(moderator)))
